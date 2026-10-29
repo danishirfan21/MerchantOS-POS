@@ -62,3 +62,5 @@ Push this repository (including `.github/workflows/milestone-2.yml`) to a GitHub
 ## Milestone 3 demo checkout
 
 Apply `db/migrations/003_checkout.sql` once to existing PostgreSQL volumes; it uses `CREATE TABLE IF NOT EXISTS` and retains the product catalog. The CI workflow applies it after the initial seed. The checkout endpoint accepts cash or deterministic simulated card outcomes; no real card details are used. Prices, discounts (0, 5 or 10%) and VAT are computed on the server in integer halalas, rounding each discount/VAT to the nearest halala (half up). Inventory rows are locked in product ID order inside a transaction; idempotency keys serialize retries. This demo API has no authentication and must not be publicly exposed.
+
+Docker Compose now runs the versioned checkout migration in a one-shot `migrate` service before starting the API. It is safe to rerun against the existing named volume; it does not delete products or inventory. Run `docker compose up -d --build` after pulling this branch.
