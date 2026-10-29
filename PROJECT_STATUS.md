@@ -70,3 +70,15 @@ Blocked here:
 - Added `scripts/verify_live_api.py` and `e2e/catalog.spec.ts`; these execute against live services in CI.
 - Locally reran Angular build and unit suite: passed, 12/12 tests. The CI workflow, .NET build, PostgreSQL integration and browser tests have **not run** here.
 - The GitHub repository is connected at danishirfan21/MerchantOS-POS. Milestone 2 remains pending a successful GitHub Actions run and review of its artifacts.
+
+## GitHub Actions live verification — 29 October 2026
+
+Milestone 2 catalog integration is **verified complete** by [run #4](https://github.com/danishirfan21/MerchantOS-POS/actions/runs/40806825677) on commit `041fb09d`.
+
+- PostgreSQL 17 service initialized with 30 products and 30 inventory rows.
+- .NET 10 API built and started; live health, catalog, category, filtered search, product detail, inventory and missing-ID 404 checks passed.
+- Angular production build passed; Vitest passed 12/12 unit tests.
+- Playwright Chromium installed; desktop and mobile catalog/cart smoke passed 2/2 tests, including API-backed loading, filtering, cart quantities, RTL toggle and mobile sheet dismissal.
+- CI artifact `merchantos-browser-artifacts` contains screenshots, Playwright HTML report and API log.
+
+The browser smoke covers desktop 1440×900 and mobile 390×844. Tablet visual comparison and a full manual review against Stitch remain outstanding; no payment or checkout persistence is implemented. Earlier historical status sections above describe the pre-CI state.
