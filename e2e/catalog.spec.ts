@@ -31,3 +31,39 @@ test('loads the live catalog and supports cart, filtering and language', async (
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
 });
+
+test('completes cash checkout against live API and views receipt', async ({ page }, testInfo) => {
+  await page.goto('/');
+  await expect(page.locator('.product')).toHaveCount(30);
+  await page.getByRole('button', { name: 'Add iPhone 15 Pro' }).click();
+  if (testInfo.project.name === 'mobile') await page.getByRole('button', { name: /Open cart/ }).click();
+  await page.getByRole('button', { name: /Proceed to Checkout/ }).click();
+  await page.getByRole('spinbutton', { name: /Cash tendered/ }).fill('5000');
+  await page.getByRole('button', { name: 'Complete sale' }).click();
+  await expect(page.getByRole('heading', { name: /Receipt MOS-/ })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath(`${testInfo.project.name}-receipt.png`), fullPage: true });
+  await page.getByRole('button', { name: 'Orders', exact: true }).click();
+  await expect(page.locator('.history-row')).not.toHaveCount(0);
+});
+
+test('recovers from declined card and deducts inventory once', async ({ page }, testInfo) => {
+  const productId = testInfo.project.name === 'mobile' ? 'p03' : 'p02';
+  const productName = productId === 'p03' ? 'Pixel 8 Pro' : 'Galaxy S24 Ultra';
+  const before = await (await page.request.get(`/api/inventory/${productId}`)).json();
+  await page.goto('/');
+  await expect(page.locator('.product')).toHaveCount(30);
+  await page.getByRole('button', { name: `Add ${productName}` }).click();
+  if (testInfo.project.name === 'mobile') await page.getByRole('button', { name: /Open cart/ }).click();
+  await page.getByRole('button', { name: /Proceed to Checkout/ }).click();
+  await page.getByRole('combobox', { name: 'Payment method' }).selectOption('card');
+  await page.getByRole('combobox', { name: 'Simulation' }).selectOption('decline');
+  await page.getByRole('button', { name: 'Complete sale' }).click();
+  await expect(page.getByRole('alert')).toContainText('Simulated card declined');
+  await expect(page.locator('.cart .line')).toHaveCount(1);
+  expect((await (await page.request.get(`/api/inventory/${productId}`)).json()).stock).toBe(before.stock);
+  await page.getByRole('combobox', { name: 'Simulation' }).selectOption('success');
+  await page.getByRole('button', { name: 'Complete sale' }).click();
+  await expect(page.getByRole('heading', { name: /Receipt MOS-/ })).toBeVisible();
+  expect((await (await page.request.get(`/api/inventory/${productId}`)).json()).stock).toBe(before.stock - 1);
+  await page.screenshot({ path: testInfo.outputPath(`${testInfo.project.name}-payment-recovery.png`), fullPage: true });
+});
