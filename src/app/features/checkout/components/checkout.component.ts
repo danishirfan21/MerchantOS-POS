@@ -67,6 +67,10 @@ export class CheckoutComponent {
   readonly taxHalalas = computed(() => this.totals().taxHalalas);
   readonly totalHalalas = computed(() => this.totals().payableHalalas);
   readonly changeHalalas = computed(() => Math.max(0, Math.round(Number(this.cashTendered() || 0) * 100) - this.totalHalalas()));
+  private resetPendingRequest(): void { this.pendingKey = null; this.pendingFingerprint = null; }
+  closePayment(): void { if (!this.submitting()) this.paymentOpen.set(false); }
+  clearCart(): void { if (!this.submitting()) { this.cart.clear(); this.resetPendingRequest(); } }
+  removeProduct(id: string): void { if (!this.submitting()) { this.cart.remove(id); this.resetPendingRequest(); } }
   readonly categoryCount = (category: string): number => category === 'All products' ? this.products().length : this.products().filter((p) => p.category === category).length;
 
   formatMoney(halalas: number): string { return new Intl.NumberFormat(this.isArabic() ? 'ar-SA' : 'en-SA', { style: 'currency', currency: 'SAR', minimumFractionDigits: 2 }).format(halalas / 100); }
@@ -76,23 +80,27 @@ export class CheckoutComponent {
   submitCheckout(): void {
     if (this.submitting() || !this.cart.itemCount()) return;
     this.checkoutError.set(null);
-    const fingerprint = JSON.stringify({ items: this.cart.lines().map(line => ({ id: line.product.id, quantity: line.quantity })), discount: this.discountPercent(), method: this.paymentMethod(), tender: this.cashTendered(), scenario: this.cardScenario() });
-    if (this.pendingFingerprint !== fingerprint) { this.pendingKey = crypto.randomUUID(); this.pendingFingerprint = fingerprint; }
-    const payload: CheckoutPayload = { items: this.cart.lines().map(line => ({ productId: line.product.id, quantity: line.quantity })), discountPercent: this.discountPercent(), paymentMethod: this.paymentMethod(), cashTenderedHalalas: this.paymentMethod() === 'cash' ? Math.round(Number(this.cashTendered()) * 100) : null, idempotencyKey: this.pendingKey!, cardScenario: this.paymentMethod() === 'card' ? this.cardScenario() : null };
-    if (this.paymentMethod() === 'cash' && (!Number.isFinite(payload.cashTenderedHalalas) || payload.cashTenderedHalalas! < this.totalHalalas())) { this.checkoutError.set('Cash tendered is less than the total due.'); return; }
+    const tender = this.cashTendered().trim();
+    if (this.paymentMethod() === 'cash' && (!/^\d+(?:\.\d{1,2})?$/.test(tender) || !Number.isSafeInteger(Math.round(Number(tender) * 100)) || Math.round(Number(tender) * 100) < this.totalHalalas())) {
+      this.checkoutError.set('Enter sufficient cash in SAR (up to two decimal places).'); return;
+    }
+    const request = { items: this.cart.lines().map(line => ({ productId: line.product.id, quantity: line.quantity })).sort((a, b) => a.productId.localeCompare(b.productId)), discountPercent: this.discountPercent(), paymentMethod: this.paymentMethod(), cashTenderedHalalas: this.paymentMethod() === 'cash' ? Math.round(Number(tender) * 100) : null, cardScenario: this.paymentMethod() === 'card' ? this.cardScenario() : null };
+    const fingerprint = JSON.stringify(request);
+    if (this.pendingFingerprint !== fingerprint || !this.pendingKey) { this.pendingKey = crypto.randomUUID(); this.pendingFingerprint = fingerprint; }
+    const payload: CheckoutPayload = { ...request, idempotencyKey: this.pendingKey };
     this.submitting.set(true);
-    this.checkoutRepository.checkout(payload).subscribe({ next: receipt => { this.receipt.set(receipt); this.cart.clear(); this.pendingKey = null; this.pendingFingerprint = null; this.paymentOpen.set(false); this.cartOpen.set(false); this.screen.set('receipt'); this.loadProducts(); this.submitting.set(false); }, error: (error: HttpErrorResponse) => { this.submitting.set(false); const code = error.error?.code; this.checkoutError.set(code === 'insufficient_stock' ? 'Insufficient stock. Refreshing catalog.' : code === 'card_declined' ? 'Simulated card declined.' : code === 'insufficient_cash' ? 'Cash tendered is insufficient.' : code === 'idempotency_conflict' ? 'Checkout changed during retry. Start again.' : 'Checkout failed. Retry safely with the same request.'); if (code === 'insufficient_stock') this.loadProducts(); if (code === 'card_declined' || code === 'insufficient_cash' || code === 'idempotency_conflict') this.pendingKey = null; } });
+    this.checkoutRepository.checkout(payload).subscribe({ next: receipt => { this.receipt.set(receipt); this.cart.clear(); this.resetPendingRequest(); this.paymentOpen.set(false); this.cartOpen.set(false); this.screen.set('receipt'); this.loadProducts(); this.submitting.set(false); }, error: (error: HttpErrorResponse) => { this.submitting.set(false); const code = error.error?.code; const ambiguous = error.status === 0 || error.status >= 500; this.checkoutError.set(code === 'insufficient_stock' ? 'Insufficient stock. Refreshing catalog.' : code === 'card_declined' ? 'Simulated card declined.' : code === 'insufficient_cash' ? 'Cash tendered is insufficient.' : code === 'idempotency_conflict' ? 'Checkout changed during retry. Start again.' : ambiguous ? 'Connection uncertain. Retry the same sale safely.' : 'Checkout rejected. Check the order and try again.'); if (!ambiguous) this.resetPendingRequest(); if (code === 'insufficient_stock') this.loadProducts(); } });
   }
-  addProduct(product: Product): void { this.cart.add(product); this.pendingKey = null; }
-  setDiscount(event: Event): void { const value = Number((event.target as HTMLSelectElement).value); this.discountPercent.set(value); this.pendingKey = null; }
+  addProduct(product: Product): void { if (!this.submitting() && this.cart.add(product)) this.resetPendingRequest(); }
+  setDiscount(event: Event): void { const value = Number((event.target as HTMLSelectElement).value); this.discountPercent.set(value); this.resetPendingRequest(); }
   brand(product: Product): string { return product.name.split(' ')[0].toUpperCase(); }
   onKeydown(event: KeyboardEvent): void { if (event.key === 'Escape') this.cartOpen.set(false); if (event.key === 'F2') { event.preventDefault(); document.querySelector<HTMLInputElement>('#product-search')?.focus(); } }
   selectCategory(category: string): void { this.selectedCategory.set(category); }
   onSearch(event: Event): void { this.query.set((event.target as HTMLInputElement).value); }
   setNav(item: string): void { this.activeNav.set(item); }
   toggleLanguage(): void { this.isArabic.update((value) => !value); }
-  increase(id: string): void { const line = this.cart.lines().find((item) => item.product.id === id); if (line) { this.cart.setQuantity(id, line.quantity + 1); this.pendingKey = null; } }
-  decrease(id: string): void { const line = this.cart.lines().find((item) => item.product.id === id); if (line) { this.cart.setQuantity(id, line.quantity - 1); this.pendingKey = null; } }
+  increase(id: string): void { const line = this.cart.lines().find((item) => item.product.id === id); if (line && !this.submitting()) { this.cart.setQuantity(id, line.quantity + 1); this.resetPendingRequest(); } }
+  decrease(id: string): void { const line = this.cart.lines().find((item) => item.product.id === id); if (line && !this.submitting()) { this.cart.setQuantity(id, line.quantity - 1); this.resetPendingRequest(); } }
   handleProductKey(event: KeyboardEvent, product: Product): void { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.addProduct(product); } }
   getCategoryLabel(category: string): string { return this.isArabic() ? ({'All products':'كل المنتجات',Phones:'الهواتف',Audio:'الصوتيات',Wearables:'الأجهزة القابلة للارتداء',Accessories:'الإكسسوارات',Power:'الشواحن',Gaming:'الألعاب'} as Record<string,string>)[category] ?? category : category; }
 }
