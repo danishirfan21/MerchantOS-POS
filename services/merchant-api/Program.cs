@@ -1,3 +1,4 @@
+using MerchantOS.Api;
 using MerchantOS.Api.Contracts;
 using MerchantOS.Api.Data;
 using MerchantOS.Api.Domain;
@@ -81,7 +82,9 @@ app.MapGet("/api/categories", async (MerchantDbContext db, CancellationToken ct)
     return Results.Ok(categories);
 });
 
-// No inventory mutation, orders, payment, authentication or write APIs in this milestone.
+app.MapCheckout();
+
+// Demo-only transactional API: add authentication before public deployment.
 app.Run();
 
 public partial class Program { }
