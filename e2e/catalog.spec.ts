@@ -100,3 +100,25 @@ test('renders bilingual catalog imagery and accessible payment dialog', async ({
   await expect(checkout).toBeFocused();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
 });
+
+test('completes Arabic checkout, prints receipt and opens order history', async ({ page }, testInfo) => {
+  await page.goto('/');
+  await expect(page.locator('.product')).toHaveCount(30);
+  await page.getByRole('button', { name: /Switch language to Arabic/ }).click();
+  const product = page.locator('.product').filter({ hasText: 'جالاكسي A55' });
+  await product.getByRole('button', { name: /إضافة/ }).click();
+  if (testInfo.project.name !== 'desktop') await page.getByRole('button', { name: /فتح السلة/ }).click();
+  await page.getByRole('button', { name: /المتابعة للدفع/ }).click();
+  await expect(page.getByRole('dialog', { name: 'إتمام الدفع' })).toBeVisible();
+  await page.getByRole('spinbutton', { name: /المبلغ النقدي المستلم/ }).fill('5000');
+  await page.getByRole('button', { name: 'إتمام البيع' }).click();
+  await expect(page.getByRole('heading', { name: /إيصال MOS-/ })).toBeVisible();
+  await expect(page.locator('.receipt')).toContainText('المجموع الفرعي');
+  await page.evaluate(() => { (window as any).__printed = false; window.print = () => { (window as any).__printed = true; }; });
+  await page.getByRole('button', { name: 'طباعة الإيصال' }).click();
+  expect(await page.evaluate(() => (window as any).__printed)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath(`${testInfo.project.name}-arabic-receipt.png`), fullPage: true });
+  await page.getByRole('button', { name: 'الطلبات', exact: true }).first().click();
+  await expect(page.getByRole('heading', { name: 'سجل الطلبات' })).toBeVisible();
+  await expect(page.locator('.history-row')).not.toHaveCount(0);
+});
