@@ -31,3 +31,17 @@ test('loads the live catalog and supports cart, filtering and language', async (
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
 });
+
+test('completes cash checkout against live API and views receipt', async ({ page }, testInfo) => {
+  await page.goto('/');
+  await expect(page.locator('.product')).toHaveCount(30);
+  await page.getByRole('button', { name: 'Add iPhone 15 Pro' }).click();
+  if (testInfo.project.name === 'mobile') await page.getByRole('button', { name: /Open cart/ }).click();
+  await page.getByRole('button', { name: /Proceed to Checkout/ }).click();
+  await page.getByRole('spinbutton', { name: /Cash tendered/ }).fill('5000');
+  await page.getByRole('button', { name: 'Complete sale' }).click();
+  await expect(page.getByRole('heading', { name: /Receipt MOS-/ })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath(`${testInfo.project.name}-receipt.png`), fullPage: true });
+  await page.getByRole('button', { name: 'Orders', exact: true }).click();
+  await expect(page.locator('.history-row')).not.toHaveCount(0);
+});
