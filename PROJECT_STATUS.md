@@ -86,3 +86,7 @@ The browser smoke covers desktop 1440×900 and mobile 390×844. Tablet visual co
 ## Milestone 3 in progress
 
 Feature branch `feat/milestone-3-checkout` adds transactional checkout, simulated payment, order history and printable receipts. The prior Milestone 2 integration passed GitHub Actions run #6. Milestone 3 must be confirmed by live PostgreSQL and Playwright CI before completion.
+
+### Live verification
+
+GitHub Actions PR run #40809143839 passed on the feature branch: PostgreSQL migration, .NET API build, live catalog and checkout assertions (including competing purchases, failed payments, retries and inventory), Angular build, 12/12 unit tests and 4/4 Playwright desktop/mobile tests. The migration-on-existing-volume Compose step was added afterward and requires the next CI run; no production authentication is present.
