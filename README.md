@@ -58,3 +58,7 @@ Run `powershell -ExecutionPolicy Bypass -File scripts/qa-windows.ps1` from the r
 ## GitHub Actions integration verification
 
 Push this repository (including `.github/workflows/milestone-2.yml`) to a GitHub repository with Actions enabled. The workflow runs on push, pull request or manual `workflow_dispatch`; no database secrets or external paid services are needed for this local-demo CI. Open the **MerchantOS Milestone 2** run, confirm all steps pass, and download `merchantos-browser-artifacts` for desktop/mobile screenshots, browser report and API log. The workflow uses a PostgreSQL 17 service and executes the seed scripts explicitly; it does not use Docker Compose.
+
+## Milestone 3 demo checkout
+
+Apply `db/migrations/003_checkout.sql` once to existing PostgreSQL volumes; it uses `CREATE TABLE IF NOT EXISTS` and retains the product catalog. The CI workflow applies it after the initial seed. The checkout endpoint accepts cash or deterministic simulated card outcomes; no real card details are used. Prices, discounts (0, 5 or 10%) and VAT are computed on the server in integer halalas, rounding each discount/VAT to the nearest halala (half up). Inventory rows are locked in product ID order inside a transaction; idempotency keys serialize retries. This demo API has no authentication and must not be publicly exposed.
