@@ -20,3 +20,6 @@
 @media(max-width:1023px){.history,.receipt{padding:18px 16px 86px}.mobile-nav{padding-bottom:env(safe-area-inset-bottom);height:calc(60px + env(safe-area-inset-bottom))}.mobile-cart{bottom:calc(65px + env(safe-area-inset-bottom))}.cart.open{bottom:calc(60px + env(safe-area-inset-bottom));height:min(72dvh,700px)}.catalog{padding-bottom:calc(125px + env(safe-area-inset-bottom))}.payment-dialog{padding:22px 18px}.payment-dialog label{font-size:14px}.line-main strong{white-space:normal;overflow-wrap:anywhere}}
 @media(max-width:390px){.product-bottom{flex-wrap:wrap}.product-bottom strong{white-space:normal;font-size:11px}.mobile-cart{gap:8px}.mobile-cart span{text-align:end}}
 @media print{.receipt{padding:0;margin:0;max-width:100%;overflow:visible}.receipt-line{break-inside:avoid}.mobile-nav,.scrim{display:none!important}}
+/* Keep SAR amounts legible alongside mixed Arabic and Latin product names. */
+.product-bottom strong,.line-price,.money strong,.payable strong,.receipt-line strong{direction:ltr;unicode-bidi:isolate}
+@media(max-width:390px){.product-bottom strong{font-size:11px;white-space:nowrap;letter-spacing:-.2px}}

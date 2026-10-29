@@ -95,7 +95,7 @@ export class CheckoutComponent {
   removeProduct(id: string): void { if (!this.submitting()) { this.cart.remove(id); this.resetPendingRequest(); } }
   readonly categoryCount = (category: string): number => category === 'All products' ? this.products().length : this.products().filter((p) => p.category === category).length;
 
-  formatMoney(halalas: number): string { return new Intl.NumberFormat(this.isArabic() ? 'ar-SA' : 'en-SA', { style: 'currency', currency: 'SAR', minimumFractionDigits: 2 }).format(halalas / 100); }
+  formatMoney(halalas: number): string { return 'SAR ' + new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(halalas / 100); }
   printReceipt(): void { window.print(); }
   showOrders(): void { this.closeCart(); this.checkoutError.set(null); this.screen.set('orders'); this.checkoutRepository.orders().subscribe({ next: orders => this.orders.set(orders), error: () => this.checkoutError.set(this.t('ordersError')) }); }
   showReceipt(id: string): void { this.checkoutRepository.order(id).subscribe({ next: receipt => { this.receipt.set(receipt); this.screen.set('receipt'); }, error: () => this.checkoutError.set(this.t('receiptError')) }); }
