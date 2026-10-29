@@ -15,6 +15,21 @@ services:
       interval: 5s
       timeout: 3s
       retries: 15
+  migrate:
+    image: postgres:17-alpine
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: merchantos
+      PGUSER: merchantos
+      PGPASSWORD: merchantos_dev
+    volumes:
+      - ./db/migrations:/migrations:ro
+    command: ["sh", "-c", "psql -v ON_ERROR_STOP=1 -1 -f /migrations/003_checkout.sql"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
   api:
     build: ./services/merchant-api
     environment:
@@ -23,7 +38,7 @@ services:
     ports:
       - "127.0.0.1:5080:8080"
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 volumes:
   merchantos_postgres:
