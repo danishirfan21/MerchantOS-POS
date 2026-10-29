@@ -69,4 +69,4 @@ Blocked here:
 - Added `.github/workflows/milestone-2.yml`: Ubuntu, .NET 10, Node 24, PostgreSQL 17 service, schema/seed load, API build/start, live endpoint assertions, Angular build, 12 unit tests, Playwright Chromium install and desktop/mobile browser smoke. CI uploads Playwright screenshots, report and API log even on failure.
 - Added `scripts/verify_live_api.py` and `e2e/catalog.spec.ts`; these execute against live services in CI.
 - Locally reran Angular build and unit suite: passed, 12/12 tests. The CI workflow, .NET build, PostgreSQL integration and browser tests have **not run** here.
-- No connected MerchantOS GitHub repository was found, so the workflow has not been pushed or triggered. Milestone 2 remains pending a successful GitHub Actions run and review of its artifacts.
+- The GitHub repository is connected at danishirfan21/MerchantOS-POS. Milestone 2 remains pending a successful GitHub Actions run and review of its artifacts.
