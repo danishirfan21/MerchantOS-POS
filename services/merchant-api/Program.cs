@@ -71,11 +71,13 @@ app.MapGet("/api/inventory/{productId}", async (string productId, MerchantDbCont
 
 app.MapGet("/api/categories", async (MerchantDbContext db, CancellationToken ct) =>
 {
-    var categories = await db.Products.AsNoTracking()
-        .GroupBy(p => p.Category)
-        .Select(g => new CategoryDto(g.Key, g.Count()))
-        .OrderBy(g => g.Name)
+    var categoryNames = await db.Products.AsNoTracking()
+        .Select(p => p.Category)
         .ToListAsync(ct);
+    var categories = categoryNames.GroupBy(name => name)
+        .Select(group => new CategoryDto(group.Key, group.Count()))
+        .OrderBy(category => category.Name)
+        .ToList();
     return Results.Ok(categories);
 });
 
