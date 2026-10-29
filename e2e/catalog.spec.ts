@@ -4,7 +4,7 @@ test('loads the live catalog and supports cart, filtering and language', async (
   const response = await page.goto('/');
   expect(response?.ok()).toBeTruthy();
   await expect(page.locator('.product')).toHaveCount(30);
-  await expect(page.locator('.product').first()).toContainText('iPhone 15 Pro');
+  await expect(page.locator('.product').filter({ hasText: 'iPhone 15 Pro' })).toHaveCount(1);
   await page.screenshot({ path: testInfo.outputPath(`${testInfo.project.name}-catalog.png`), fullPage: true });
 
   await page.getByRole('searchbox', { name: 'Search products' }).fill('Sony');
