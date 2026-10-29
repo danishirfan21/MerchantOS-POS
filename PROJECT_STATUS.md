@@ -82,3 +82,7 @@ Milestone 2 catalog integration is **verified complete** by [run #4](https://git
 - CI artifact `merchantos-browser-artifacts` contains screenshots, Playwright HTML report and API log.
 
 The browser smoke covers desktop 1440×900 and mobile 390×844. Tablet visual comparison and a full manual review against Stitch remain outstanding; no payment or checkout persistence is implemented. Earlier historical status sections above describe the pre-CI state.
+
+## Milestone 3 in progress
+
+Feature branch `feat/milestone-3-checkout` adds transactional checkout, simulated payment, order history and printable receipts. The prior Milestone 2 integration passed GitHub Actions run #6. Milestone 3 must be confirmed by live PostgreSQL and Playwright CI before completion.
