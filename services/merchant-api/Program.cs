@@ -1,0 +1,85 @@
+using MerchantOS.Api.Contracts;
+using MerchantOS.Api.Data;
+using MerchantOS.Api.Domain;
+using Microsoft.EntityFrameworkCore;
+
+var builder = WebApplication.CreateBuilder(args);
+var connectionString = builder.Configuration.GetConnectionString("MerchantDb")
+    ?? throw new InvalidOperationException("ConnectionStrings:MerchantDb must be configured.");
+
+builder.Services.AddDbContext<MerchantDbContext>(options => options.UseNpgsql(connectionString));
+builder.Services.AddCors(options => options.AddPolicy("pos-dev", policy => policy
+    .WithOrigins("http://localhost:4200", "http://127.0.0.1:4200")
+    .AllowAnyHeader().AllowAnyMethod()));
+
+var app = builder.Build();
+app.UseCors("pos-dev");
+
+app.MapGet("/api/health", async (MerchantDbContext db, CancellationToken ct) =>
+{
+    try
+    {
+        return await db.Database.CanConnectAsync(ct)
+            ? Results.Ok(new { status = "ok", database = "connected" })
+            : Results.Problem("Database is unavailable", statusCode: 503);
+    }
+    catch (Exception ex) when (ex is not OperationCanceledException)
+    {
+        return Results.Problem("Database is unavailable", statusCode: 503);
+    }
+});
+
+app.MapGet("/api/products", async (MerchantDbContext db, string? search, string? category, CancellationToken ct) =>
+{
+    IQueryable<ProductEntity> query = db.Products.AsNoTracking();
+    if (!string.IsNullOrWhiteSpace(category))
+    {
+        var wanted = category.Trim();
+        query = query.Where(p => p.Category == wanted);
+    }
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        var keyword = $"%{search.Trim()}%";
+        query = query.Where(p => EF.Functions.ILike(p.Name, keyword)
+            || EF.Functions.ILike(p.NameAr, keyword)
+            || EF.Functions.ILike(p.Sku, keyword));
+    }
+    var products = await query.OrderBy(p => p.Name).Select(p => new ProductDto(
+        p.Id, p.Sku, p.Name, p.NameAr, p.Category,
+        p.PriceHalalas, p.Inventory.QuantityOnHand, p.Color, p.Icon, p.Badge)).ToListAsync(ct);
+    return Results.Ok(products);
+});
+
+app.MapGet("/api/products/{id}", async (string id, MerchantDbContext db, CancellationToken ct) =>
+{
+    var product = await db.Products.AsNoTracking()
+        .Where(p => p.Id == id)
+        .Select(p => new ProductDto(p.Id, p.Sku, p.Name, p.NameAr, p.Category,
+            p.PriceHalalas, p.Inventory.QuantityOnHand, p.Color, p.Icon, p.Badge))
+        .SingleOrDefaultAsync(ct);
+    return product is null ? Results.NotFound() : Results.Ok(product);
+});
+
+app.MapGet("/api/inventory/{productId}", async (string productId, MerchantDbContext db, CancellationToken ct) =>
+{
+    var inventory = await db.InventoryLevels.AsNoTracking()
+        .Where(i => i.ProductId == productId)
+        .Select(i => new { i.ProductId, Stock = i.QuantityOnHand })
+        .SingleOrDefaultAsync(ct);
+    return inventory is null ? Results.NotFound() : Results.Ok(inventory);
+});
+
+app.MapGet("/api/categories", async (MerchantDbContext db, CancellationToken ct) =>
+{
+    var categories = await db.Products.AsNoTracking()
+        .GroupBy(p => p.Category)
+        .Select(g => new CategoryDto(g.Key, g.Count()))
+        .OrderBy(g => g.Name)
+        .ToListAsync(ct);
+    return Results.Ok(categories);
+});
+
+// No inventory mutation, orders, payment, authentication or write APIs in this milestone.
+app.Run();
+
+public partial class Program { }

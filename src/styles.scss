@@ -1,0 +1,8 @@
+@use "./styles/checkout";
+* { box-sizing: border-box; }
+html, body { margin: 0; min-width: 320px; min-height: 100%; }
+body { -webkit-font-smoothing: antialiased; }
+button, input { font: inherit; }
+button:focus-visible, a:focus-visible, [role="button"]:focus-visible { outline: 2px solid #84a98c; outline-offset: 2px; }
+::selection { background: #dce9dc; }
+

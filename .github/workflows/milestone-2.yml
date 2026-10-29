@@ -1,0 +1,73 @@
+name: MerchantOS Milestone 2
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: merchantos
+          POSTGRES_USER: merchantos
+          POSTGRES_PASSWORD: merchantos_dev
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U merchantos -d merchantos"
+          --health-interval 5s --health-timeout 3s --health-retries 15
+    env:
+      ConnectionStrings__MerchantDb: Host=127.0.0.1;Port=5433;Database=merchantos;Username=merchantos;Password=merchantos_dev
+      ASPNETCORE_URLS: http://127.0.0.1:5080
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Initialize PostgreSQL
+        env:
+          PGPASSWORD: merchantos_dev
+        run: |
+          psql -h 127.0.0.1 -p 5433 -U merchantos -d merchantos -v ON_ERROR_STOP=1 -f db/init/001_schema.sql
+          psql -h 127.0.0.1 -p 5433 -U merchantos -d merchantos -v ON_ERROR_STOP=1 -f db/init/002_seed.sql
+          test "$(psql -h 127.0.0.1 -p 5433 -U merchantos -d merchantos -Atc 'SELECT COUNT(*) FROM products')" = 30
+          test "$(psql -h 127.0.0.1 -p 5433 -U merchantos -d merchantos -Atc 'SELECT COUNT(*) FROM inventory_levels')" = 30
+      - name: Build API
+        run: dotnet build services/merchant-api/MerchantOS.Api.csproj --configuration Release
+      - name: Start API and verify live endpoints
+        run: |
+          dotnet run --project services/merchant-api/MerchantOS.Api.csproj --no-build --configuration Release > api.log 2>&1 &
+          echo $! > api.pid
+          for i in {1..40}; do
+            if curl -fsS http://127.0.0.1:5080/api/health >/dev/null; then break; fi
+            sleep 2
+          done
+          python3 scripts/verify_live_api.py
+      - name: Install and verify Angular
+        run: |
+          npm ci
+          npm run build
+          npm test
+          python3 scripts/verify_catalog_seed.py
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Browser smoke against live API
+        run: npm run test:e2e
+      - name: Upload browser artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: merchantos-browser-artifacts
+          path: |
+            playwright-report/
+            test-results/
+            api.log
+          if-no-files-found: ignore
