@@ -25,6 +25,7 @@ export class CheckoutComponent {
   readonly receipt = signal<Receipt | null>(null);
   readonly orders = signal<Receipt[]>([]);
   private pendingKey: string | null = null;
+  private pendingFingerprint: string | null = null;
   private readonly destroyRef = inject(DestroyRef);
   readonly products = signal<Product[]>([]);
   readonly isLoading = signal(true);
@@ -75,11 +76,12 @@ export class CheckoutComponent {
   submitCheckout(): void {
     if (this.submitting() || !this.cart.itemCount()) return;
     this.checkoutError.set(null);
-    this.pendingKey ??= crypto.randomUUID();
-    const payload: CheckoutPayload = { items: this.cart.lines().map(line => ({ productId: line.product.id, quantity: line.quantity })), discountPercent: this.discountPercent(), paymentMethod: this.paymentMethod(), cashTenderedHalalas: this.paymentMethod() === 'cash' ? Math.round(Number(this.cashTendered()) * 100) : null, idempotencyKey: this.pendingKey, cardScenario: this.paymentMethod() === 'card' ? this.cardScenario() : null };
+    const fingerprint = JSON.stringify({ items: this.cart.lines().map(line => ({ id: line.product.id, quantity: line.quantity })), discount: this.discountPercent(), method: this.paymentMethod(), tender: this.cashTendered(), scenario: this.cardScenario() });
+    if (this.pendingFingerprint !== fingerprint) { this.pendingKey = crypto.randomUUID(); this.pendingFingerprint = fingerprint; }
+    const payload: CheckoutPayload = { items: this.cart.lines().map(line => ({ productId: line.product.id, quantity: line.quantity })), discountPercent: this.discountPercent(), paymentMethod: this.paymentMethod(), cashTenderedHalalas: this.paymentMethod() === 'cash' ? Math.round(Number(this.cashTendered()) * 100) : null, idempotencyKey: this.pendingKey!, cardScenario: this.paymentMethod() === 'card' ? this.cardScenario() : null };
     if (this.paymentMethod() === 'cash' && (!Number.isFinite(payload.cashTenderedHalalas) || payload.cashTenderedHalalas! < this.totalHalalas())) { this.checkoutError.set('Cash tendered is less than the total due.'); return; }
     this.submitting.set(true);
-    this.checkoutRepository.checkout(payload).subscribe({ next: receipt => { this.receipt.set(receipt); this.cart.clear(); this.pendingKey = null; this.paymentOpen.set(false); this.cartOpen.set(false); this.screen.set('receipt'); this.loadProducts(); this.submitting.set(false); }, error: (error: HttpErrorResponse) => { this.submitting.set(false); const code = error.error?.code; this.checkoutError.set(code === 'insufficient_stock' ? 'Insufficient stock. Refreshing catalog.' : code === 'card_declined' ? 'Simulated card declined.' : code === 'insufficient_cash' ? 'Cash tendered is insufficient.' : code === 'idempotency_conflict' ? 'Checkout changed during retry. Start again.' : 'Checkout failed. Retry safely with the same request.'); if (code === 'insufficient_stock') this.loadProducts(); if (code === 'card_declined' || code === 'insufficient_cash' || code === 'idempotency_conflict') this.pendingKey = null; } });
+    this.checkoutRepository.checkout(payload).subscribe({ next: receipt => { this.receipt.set(receipt); this.cart.clear(); this.pendingKey = null; this.pendingFingerprint = null; this.paymentOpen.set(false); this.cartOpen.set(false); this.screen.set('receipt'); this.loadProducts(); this.submitting.set(false); }, error: (error: HttpErrorResponse) => { this.submitting.set(false); const code = error.error?.code; this.checkoutError.set(code === 'insufficient_stock' ? 'Insufficient stock. Refreshing catalog.' : code === 'card_declined' ? 'Simulated card declined.' : code === 'insufficient_cash' ? 'Cash tendered is insufficient.' : code === 'idempotency_conflict' ? 'Checkout changed during retry. Start again.' : 'Checkout failed. Retry safely with the same request.'); if (code === 'insufficient_stock') this.loadProducts(); if (code === 'card_declined' || code === 'insufficient_cash' || code === 'idempotency_conflict') this.pendingKey = null; } });
   }
   addProduct(product: Product): void { this.cart.add(product); this.pendingKey = null; }
   setDiscount(event: Event): void { const value = Number((event.target as HTMLSelectElement).value); this.discountPercent.set(value); this.pendingKey = null; }
