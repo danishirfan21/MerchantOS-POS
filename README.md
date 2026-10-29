@@ -1,66 +1,63 @@
 # MerchantOS POS
 
-Angular 22 cashier application + read-only ASP.NET Core 10 / PostgreSQL product and inventory API. The UI remains based on the approved Google Stitch design. Milestone 2 replaces its hardcoded catalog with live database results; checkout and payment processing are **not implemented**.
+A bilingual English/Arabic retail checkout demo for a Saudi electronics store. The cashier UI uses Angular 22 and connects to an ASP.NET Core 10 API backed by PostgreSQL 17. Prices and transaction totals use integer halalas (SAR); the API reads current prices, locks inventory rows, records orders and simulated payments, and deducts stock in one database transaction.
 
-## Requirements
+> **Demo only:** The API has no authentication or authorization. Do not expose it to the public internet. Card approval/decline is deterministic simulation; no card details are collected or processed.
 
-- Docker Desktop (for ASP.NET Core API and PostgreSQL)
-- Node.js 24.15+ and npm 11+ (for Angular)
+## Features
 
-## Quick start (Windows PowerShell)
+- Responsive catalog of 30 products, local original SVG illustrations, search, category filters and live stock.
+- Signals cart with stock limits, 0/5/10% discounts and 15% VAT; English/Arabic and RTL across catalog, payment, order history and receipts.
+- Cash tender/change and simulated card checkout, safe idempotent retries, inventory refresh, printable receipt and recent orders.
+- PostgreSQL row locks serialize competing stock purchases; duplicate checkout keys cannot create duplicate completed sales.
 
-```powershell
+## Screenshots
+
+Actual live API/PostgreSQL browser captures at the requested viewports. CI also uploads the Playwright report and cart/receipt captures.
+
+| Desktop 1440×900 | Tablet 768×1024 | Mobile 390×844 |
+| --- | --- | --- |
+| [View desktop](docs/screenshots/desktop.png) | [View tablet](docs/screenshots/tablet.png) | [View mobile](docs/screenshots/mobile.png) |
+
+## Run locally
+
+Install Docker (with Compose), Node.js 24 and npm. From the repository root:
+
+```sh
 docker compose up -d --build
-curl.exe http://localhost:5080/api/health
-curl.exe http://localhost:5080/api/products
 npm ci
 npm start
 ```
 
-Open `http://localhost:4200`. Angular proxies `/api` to `http://127.0.0.1:5080` in local development, so the frontend uses relative API URLs. If the API is offline, the product area displays an explicit error and Retry button instead of showing fabricated inventory data.
+Open `http://localhost:4200`. The Angular dev server proxies `/api` to `http://127.0.0.1:5080`. Check API health at `http://localhost:5080/api/health`. Compose starts PostgreSQL, applies `db/migrations/003_checkout.sql` through a one-shot migrator, then starts the API. The migration preserves an existing database volume; the initial catalog seed contains 30 products and inventory rows. Compose credentials are for local demo use only.
 
-## Build and tests
+## Verify
 
-```powershell
+```sh
 npm run build
 npm test
-python scripts/verify_catalog_seed.py
+npm run test:e2e
 ```
 
-The Angular cart test suite from Milestone 1.5 is preserved and extended with catalog reconciliation coverage. **Milestone 2 runtime/build verification is still pending** because the implementation environment lacked a .NET SDK, Docker and working network access. Do not treat these commands as already passed.
+The Playwright suite requires the API/database running and a Chromium browser (`npx playwright install chromium` if needed). CI in `.github/workflows/milestone-2.yml` starts a fresh PostgreSQL 17 service, applies schema/seed/migration, builds and exercises the live .NET API, builds/tests Angular, then runs desktop, tablet and mobile Playwright flows with zero retries. `scripts/verify_live_api.py` checks catalog endpoints; `scripts/verify_checkout.py` checks transactions and concurrency against real PostgreSQL. CI uploads screenshots, Playwright HTML report and API log.
 
-## Backend endpoints
+## Architecture and API
 
-- `GET /api/health`
-- `GET /api/products` (optional `category`, `search` query)
-- `GET /api/products/{id}`
-- `GET /api/categories`
-- `GET /api/inventory/{productId}`
+- `src/app/features/checkout`: standalone Angular checkout screen, Signals cart, typed bilingual copy and focused unit tests.
+- `src/app/core/services`: typed HTTP repositories for catalog and checkout.
+- `services/merchant-api`: ASP.NET Core minimal API and Npgsql transaction code.
+- `db/init` and `db/migrations`: catalog seed and versioned checkout schema.
+- `public/products`: original local SVG product-category illustrations.
 
-Product prices are integer halalas; the database holds products and separate per-product stock levels. Local PostgreSQL database initializes 30 products from `db/init/*.sql`. Stock is **read-only** in this milestone.
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/health` | Database health |
+| `GET /api/products?search=&category=` | Catalog search/filter |
+| `GET /api/products/{id}` | Product detail |
+| `GET /api/categories` | Categories |
+| `GET /api/inventory/{productId}` | Current stock |
+| `POST /api/checkout` | Atomic demo sale |
+| `GET /api/orders` | Recent orders |
+| `GET /api/orders/{id}` | Receipt |
 
-## Layout
-
-- `src/app/core/services/product.repository.ts` – typed Angular API repository
-- `src/app/features/checkout` – responsive Stitch-inspired POS, cart and totals
-- `services/merchant-api` – .NET 10 minimal API + EF Core/Npgsql
-- `db/init` – initial local schema and repeatable seed
-- `docker-compose.yml` – local database and API containers
-- `docs/MILESTONE_2.md` – endpoints, verification checklist, constraints and outstanding work
-- `PROJECT_STATUS.md` – progress and test claims
-
-The credentials in Docker Compose and API configuration are strictly for local development. Supply secure secrets and reviewed migrations before deployment. There is no authentication, payment, or inventory write endpoint yet.
-
-## Local completion check
-
-Run `powershell -ExecutionPolicy Bypass -File scripts/qa-windows.ps1` from the repository root on Windows with Docker Desktop and Node 24.15+. This builds and starts the API/database, checks live endpoints, installs Angular dependencies, builds the UI, and runs unit tests. Then open `http://localhost:4200` for browser verification. The script does not perform browser visual QA.
-
-## GitHub Actions integration verification
-
-Push this repository (including `.github/workflows/milestone-2.yml`) to a GitHub repository with Actions enabled. The workflow runs on push, pull request or manual `workflow_dispatch`; no database secrets or external paid services are needed for this local-demo CI. Open the **MerchantOS Milestone 2** run, confirm all steps pass, and download `merchantos-browser-artifacts` for desktop/mobile screenshots, browser report and API log. The workflow uses a PostgreSQL 17 service and executes the seed scripts explicitly; it does not use Docker Compose.
-
-## Milestone 3 demo checkout
-
-Apply `db/migrations/003_checkout.sql` once to existing PostgreSQL volumes; it uses `CREATE TABLE IF NOT EXISTS` and retains the product catalog. The CI workflow applies it after the initial seed. The checkout endpoint accepts cash or deterministic simulated card outcomes; no real card details are used. Prices, discounts (0, 5 or 10%) and VAT are computed on the server in integer halalas, rounding each discount/VAT to the nearest halala (half up). Inventory rows are locked in product ID order inside a transaction; idempotency keys serialize retries. This demo API has no authentication and must not be publicly exposed.
-
-Docker Compose now runs the versioned checkout migration in a one-shot `migrate` service before starting the API. It is safe to rerun against the existing named volume; it does not delete products or inventory. Run `docker compose up -d --build` after pulling this branch.
+Checkout accepts product IDs/quantities, an allowed discount (0, 5 or 10), cash tender or a deterministic simulated card scenario, and an idempotency key. The server ignores any frontend price assumptions. Discount and VAT are rounded separately to the nearest halala, half up. Failed payments leave inventory unchanged. See [PROJECT_STATUS.md](PROJECT_STATUS.md) for verified checks and limitations.

@@ -1,30 +1,25 @@
 # MerchantOS POS — Project status
 
-## Milestone 3.1: Checkout reliability
+## Milestone 4: Visual QA and portfolio polish
 
-**Status: verified on `feat/milestone-3-checkout`; PR #1 is open and unmerged.**
+**Verified on `feat/milestone-4-polish` (stacked PR #2); both PRs remain open and unmerged.**
 
-[GitHub Actions run #40928422996](https://github.com/danishirfan21/MerchantOS-POS/actions/runs/40928422996) passed on commit `49a8e98` (29 October 2026):
+The branch adds complete English/Arabic UI copy for supported screens, RTL alignment and consistent SAR formatting; six original local SVG category illustrations used across 30 catalog products; explicit demo labels instead of fabricated shift and cashier metrics; dialog/cart keyboard focus and Escape/backdrop handling; responsive tablet/mobile sizing; and current README documentation. Checkout and database transaction logic remain unchanged.
 
-- PostgreSQL 17 seed and versioned checkout migration passed; .NET 10 API built and live catalog/transaction assertions passed.
-- Live checkout checks cover cash and simulated card success, declined payment, insufficient cash and stock, invalid requests, rollback, server-side totals, receipt/history, duplicate same-key requests, conflicting keys and competing purchases. No stock is deducted for failed payments.
-- Angular production build passed; **20/20 unit tests** passed across three files, including eight request identity and payment recovery tests.
-- Playwright Chromium desktop/mobile checkout and recovery passed **6/6 tests without retries**. Screenshots, HTML report and API log are uploaded as CI artifacts.
+[GitHub Actions PR run #40934104138](https://github.com/danishirfan21/MerchantOS-POS/actions/runs/40934104138) passed on commit `00ceb81`: PostgreSQL 17 seed/migration, .NET 10 API build and live catalog/checkout/concurrency checks, Angular production build, **21/21 unit tests** across four files and **15/15 Playwright desktop/tablet/mobile tests** with retries disabled. CI uploaded 1440×900, 768×1024 and 390×844 captures, receipt/cart/Arabic captures, Playwright HTML report and API log. The three English catalog captures were visually reviewed and added under `docs/screenshots`; Arabic mobile capture was reviewed after adjusting currency presentation to prevent narrow-card crowding. No horizontal overflow was detected in tested viewports.
 
-The frontend now clears the key and fingerprint together for definitive failures and successful checkout, preserves the same key after uncertain network/server failures, and creates a new key when the request changes. Cart removal and clearing also invalidate the pending request. Submissions are blocked while payment is in progress; cash accepts only integer halalas.
+The approved Stitch screenshot file was not accessible in this workspace. Visual review uses actual browser screenshots and the supplied design token/specification text; exact pixel parity with Stitch is unverified.
 
-## Milestone 3: Transactional checkout
+## Milestone 3.1 baseline
 
-Versioned SQL migration adds orders, order items, payments and checkout idempotency. The API calculates prices, discounts and VAT from PostgreSQL and updates inventory atomically with row locks. Angular provides cash and deterministic simulated card checkout, order history and printable receipts. Milestone 3 was previously verified by [run #40809931154](https://github.com/danishirfan21/MerchantOS-POS/actions/runs/40809931154), which passed the earlier 12/12 unit and 4/4 browser suites.
+[PR #1 run #40928743649](https://github.com/danishirfan21/MerchantOS-POS/actions/runs/40928743649) passed PostgreSQL migration, .NET API/live checkout checks, Angular build, 20/20 unit tests and 6/6 desktop/mobile Playwright tests without retries. PR #1 is ready for review, open and unmerged.
 
 ## Milestone 2 baseline
 
-Milestone 2 catalog integration passed [Actions run #6](https://github.com/danishirfan21/MerchantOS-POS/actions/runs/40807068324): PostgreSQL initialized with 30 products and inventory rows; .NET API/live catalog checks, Angular build, 12/12 unit tests and 2/2 desktop/mobile browser smoke tests passed. Earlier local-environment gaps were superseded by this CI result.
+[Run #6](https://github.com/danishirfan21/MerchantOS-POS/actions/runs/40807068324) passed PostgreSQL initialization with 30 products/inventory rows, live catalog API, Angular build, 12/12 unit tests and 2/2 browser tests. Earlier local environment gaps were superseded by CI.
 
-## Known limitations
+## Merge order and limits
 
-The checkout API is **demo-only without authentication** and must not be publicly exposed. Card outcomes are deterministic simulations without card details or a gateway. Refunds, split payments, receipt printer integration, advanced reporting and multi-store stock remain outside scope. Tablet visual comparison against Stitch remains open.
+Review and merge PR #1 into `main` first. Retarget PR #2 from `feat/milestone-3-checkout` to `main`, verify its checks, then review and merge PR #2. Neither PR is to be merged automatically.
 
-## Local operation
-
-Run `docker compose up -d --build` to start PostgreSQL, apply the checkout migration through the one-shot `migrate` service and start the API. Run `npm ci && npm start` for Angular. The migration preserves the existing catalog. See README for details.
+The API is demo-only without authentication and must not be exposed publicly. Simulated card processing stores no card details. No real gateway, refunds, multi-store management, hardware printing or advanced reporting. Product illustrations are stylized by category rather than exact manufacturer photography. Tablet and mobile screenshots are browser captures, not a claim of exact Stitch parity.
