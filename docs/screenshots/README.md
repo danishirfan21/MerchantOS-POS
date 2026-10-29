@@ -1,0 +1,1 @@
+Actual Chromium screenshots captured by Playwright against the running Angular app, ASP.NET Core API and PostgreSQL database in GitHub Actions run #40934104138. Desktop: 1440×900; tablet: 768×1024; mobile: 390×844. The CI artifact contains additional Arabic, cart and receipt screenshots and the HTML test report.

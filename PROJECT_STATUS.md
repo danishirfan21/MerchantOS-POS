@@ -2,11 +2,11 @@
 
 ## Milestone 4: Visual QA and portfolio polish
 
-**In progress on `feat/milestone-4-polish` (stacked PR #2); no PR has been merged.**
+**Verified on `feat/milestone-4-polish` (stacked PR #2); both PRs remain open and unmerged.**
 
 The branch adds complete English/Arabic UI copy for supported screens, RTL alignment and consistent SAR formatting; six original local SVG category illustrations used across 30 catalog products; explicit demo labels instead of fabricated shift and cashier metrics; dialog/cart keyboard focus and Escape/backdrop handling; responsive tablet/mobile sizing; and current README documentation. Checkout and database transaction logic remain unchanged.
 
-First GitHub Actions PR run #40933375281 passed PostgreSQL migration and live API checkout assertions, Angular production build, **21/21 unit tests** and **12/12 Playwright desktop/tablet/mobile tests with retries disabled**. It uploaded actual 1440×900, 768×1024 and 390×844 screenshots, Playwright HTML report and API log. Visual review found Arabic price crowding on narrow product cards, so a subsequent currency/layout fix and fresh screenshots require final CI verification before Milestone 4 is marked complete.
+[GitHub Actions PR run #40934104138](https://github.com/danishirfan21/MerchantOS-POS/actions/runs/40934104138) passed on commit `00ceb81`: PostgreSQL 17 seed/migration, .NET 10 API build and live catalog/checkout/concurrency checks, Angular production build, **21/21 unit tests** across four files and **15/15 Playwright desktop/tablet/mobile tests** with retries disabled. CI uploaded 1440×900, 768×1024 and 390×844 captures, receipt/cart/Arabic captures, Playwright HTML report and API log. The three English catalog captures were visually reviewed and added under `docs/screenshots`; Arabic mobile capture was reviewed after adjusting currency presentation to prevent narrow-card crowding. No horizontal overflow was detected in tested viewports.
 
 The approved Stitch screenshot file was not accessible in this workspace. Visual review uses actual browser screenshots and the supplied design token/specification text; exact pixel parity with Stitch is unverified.
 
