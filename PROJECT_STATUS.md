@@ -2,7 +2,7 @@
 
 ## Milestone 2: PostgreSQL catalog and typed REST API integration
 
-**Status: Implementation prepared; integration verification blocked by environment. NOT yet verified complete.**
+**Status: Milestone 2 catalog integration verified by GitHub Actions run #4. See the live verification section below.**
 
 ### Code delivered
 
@@ -22,7 +22,7 @@
 - Python/SQLite **seed contract check passed**: 30 unique products, 30 inventory rows, foreign-key joins, nonnegative price/stock constraints, and repeatable upsert.
 - All 10 frontend TypeScript files parsed with **zero syntax errors** using TypeScript parser (syntax only, not a full Angular compilation).
 
-### Not verified (must not claim passed)
+### Historical pre-CI verification gaps (now superseded by the live verification below)
 
 - Actual ASP.NET Core `dotnet build` (no .NET SDK available here).
 - Actual PostgreSQL data initialization or live API HTTP responses (Docker not installed here).
