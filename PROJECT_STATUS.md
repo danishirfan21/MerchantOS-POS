@@ -1,23 +1,30 @@
 # MerchantOS POS — Project status
 
+## Milestone 3.1: Checkout reliability
+
+**Status: verified on `feat/milestone-3-checkout`; PR #1 is open and unmerged.**
+
+[GitHub Actions run #40928422996](https://github.com/danishirfan21/MerchantOS-POS/actions/runs/40928422996) passed on commit `49a8e98` (29 October 2026):
+
+- PostgreSQL 17 seed and versioned checkout migration passed; .NET 10 API built and live catalog/transaction assertions passed.
+- Live checkout checks cover cash and simulated card success, declined payment, insufficient cash and stock, invalid requests, rollback, server-side totals, receipt/history, duplicate same-key requests, conflicting keys and competing purchases. No stock is deducted for failed payments.
+- Angular production build passed; **20/20 unit tests** passed across three files, including eight request identity and payment recovery tests.
+- Playwright Chromium desktop/mobile checkout and recovery passed **6/6 tests without retries**. Screenshots, HTML report and API log are uploaded as CI artifacts.
+
+The frontend now clears the key and fingerprint together for definitive failures and successful checkout, preserves the same key after uncertain network/server failures, and creates a new key when the request changes. Cart removal and clearing also invalidate the pending request. Submissions are blocked while payment is in progress; cash accepts only integer halalas.
+
 ## Milestone 3: Transactional checkout
 
-**Status: implemented and verified on the feature branch; PR #1 remains open and unmerged.**
-
-GitHub Actions [run #40809686037](https://github.com/danishirfan21/MerchantOS-POS/actions/runs/40809686037) passed on commit `c164bf7` (29 October 2026):
-
-- PostgreSQL 17 catalog seed and versioned checkout migration applied.
-- ASP.NET Core 10 API built and started; live catalog endpoints passed.
-- Live checkout assertions passed for cash and simulated card success, failed card, insufficient cash, invalid products/quantities, insufficient stock, server-side price and VAT, idempotent retry, conflicting key, order/receipt persistence, inventory deduction and concurrent competing purchases.
-- Angular production build passed; 12/12 unit tests passed.
-- Playwright Chromium desktop/mobile smoke passed 4/4 tests, including live checkout, receipts, history, catalog and cart. CI uploaded screenshots, report and API log.
-
-The checkout API is a **demo** without authentication. Do not expose it publicly. Card outcomes are deterministic simulations; no real card data or gateway is used. No refunds, split payments, hardware printer, advanced reporting or multi-store inventory are included. Tablet visual review against Stitch remains a separate design check.
+Versioned SQL migration adds orders, order items, payments and checkout idempotency. The API calculates prices, discounts and VAT from PostgreSQL and updates inventory atomically with row locks. Angular provides cash and deterministic simulated card checkout, order history and printable receipts. Milestone 3 was previously verified by [run #40809931154](https://github.com/danishirfan21/MerchantOS-POS/actions/runs/40809931154), which passed the earlier 12/12 unit and 4/4 browser suites.
 
 ## Milestone 2 baseline
 
-Milestone 2 catalog integration passed [Actions run #6](https://github.com/danishirfan21/MerchantOS-POS/actions/runs/40807068324): PostgreSQL initialized with 30 products and inventory rows; .NET API and live catalog checks passed; Angular build, 12/12 unit tests and 2/2 desktop/mobile browser smoke tests passed. Historical local-environment limitations were superseded by that CI verification.
+Milestone 2 catalog integration passed [Actions run #6](https://github.com/danishirfan21/MerchantOS-POS/actions/runs/40807068324): PostgreSQL initialized with 30 products and inventory rows; .NET API/live catalog checks, Angular build, 12/12 unit tests and 2/2 desktop/mobile browser smoke tests passed. Earlier local-environment gaps were superseded by this CI result.
+
+## Known limitations
+
+The checkout API is **demo-only without authentication** and must not be publicly exposed. Card outcomes are deterministic simulations without card details or a gateway. Refunds, split payments, receipt printer integration, advanced reporting and multi-store stock remain outside scope. Tablet visual comparison against Stitch remains open.
 
 ## Local operation
 
-Use `docker compose up -d --build` to start PostgreSQL, apply the checkout migration through the one-shot `migrate` service and start the API, then `npm ci && npm start` for Angular. The migration does not remove existing catalog data. See README for details.
+Run `docker compose up -d --build` to start PostgreSQL, apply the checkout migration through the one-shot `migrate` service and start the API. Run `npm ci && npm start` for Angular. The migration preserves the existing catalog. See README for details.
