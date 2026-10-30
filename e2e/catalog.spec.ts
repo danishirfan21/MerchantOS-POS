@@ -74,7 +74,7 @@ test('renders bilingual catalog imagery and accessible payment dialog', async ({
   await page.goto('/');
   await expect(page.locator('.product')).toHaveCount(30);
   await expect(page.locator('.product img')).toHaveCount(30);
-  expect(await page.locator('.product img').evaluateAll(images => images.every(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0))).toBeTruthy();
+  await expect.poll(()=>page.locator('.product img').evaluateAll(images => images.every(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0))).toBeTruthy();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
   await expect(page.locator('.shift')).toContainText('Demo store');
   await page.screenshot({ path: testInfo.outputPath(`${testInfo.project.name}-catalog-english.png`), fullPage: true });

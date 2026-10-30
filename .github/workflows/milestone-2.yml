@@ -48,7 +48,9 @@ jobs:
         run: |
           for migration in db/migrations/*.sql; do psql -h 127.0.0.1 -p 5433 -U merchantos -d merchantos -v ON_ERROR_STOP=1 -f "$migration"; done
       - name: Build API
-        run: dotnet build services/merchant-api/MerchantOS.Api.csproj --configuration Release
+        run: |
+          dotnet build services/merchant-api/MerchantOS.Api.csproj --configuration Release
+          dotnet test services/merchant-api.Tests/MerchantOS.Api.Tests.csproj -c Release
       - name: Provision isolated identities
         run: python3 scripts/ci_accounts.py
       - name: Start API and verify live endpoints
