@@ -1,4 +1,4 @@
-import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
+import { Component, computed, DestroyRef, inject, signal, Input, Output, EventEmitter } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ProductRepository } from '../../../core/services/product.repository';
@@ -14,6 +14,8 @@ import { CopyKey, translate } from './checkout.i18n';
   templateUrl: './checkout.component.html', styleUrl: './checkout.component.scss'
 })
 export class CheckoutComponent {
+  @Input() username = "";
+  @Output() readonly signOut = new EventEmitter<void>();
   private readonly productRepository = inject(ProductRepository);
   private readonly checkoutRepository = inject(CheckoutRepository);
   readonly screen = signal<'checkout' | 'orders' | 'receipt'>('checkout');

@@ -13,7 +13,7 @@
     <header class="header">
       <div class="mobile-logo">▣　<strong>MerchantOS</strong></div>
       <div class="branch">▣　{{ t('demoStore') }} <span>{{ loadError() ? t('disconnected') : t('connected') }}</span></div>
-      <div class="header-right"><button (click)="toggleLanguage()" [attr.aria-label]="isArabic() ? 'Switch language to English' : 'Switch language to Arabic'">EN / عربي</button><span class="cashier-name">{{ t('demoCashier') }}</span></div>
+      <div class="header-right"><button (click)="toggleLanguage()" [attr.aria-label]="isArabic() ? 'Switch language to English' : 'Switch language to Arabic'">EN / عربي</button><span class="cashier-name">{{ username }}</span><button type="button" class="auth-signout" (click)="signOut.emit()">Sign out</button></div>
     </header>
     @if (screen() === 'orders') {
       <section class="history"><button (click)="goCheckout()">← {{ t('checkout') }}</button><h1>{{ t('orderHistory') }}</h1>

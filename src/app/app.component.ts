@@ -5,8 +5,7 @@ import { CheckoutComponent } from './features/checkout/components/checkout.compo
 @Component({selector:'mos-root',standalone:true,imports:[CheckoutComponent,FormsModule],template:`
 @if(!auth.ready()){<main class="auth-screen"><p>Checking session…</p></main>}
 @else if(auth.user()){
- <div class="session-bar"><span>{{auth.user()?.username}} · Cashier</span><button type="button" (click)="logout()">Sign out</button></div>
- @if(error()){<p role="alert">{{error()}}</p>}<mos-checkout />
+ @if(error()){<p role="alert">{{error()}}</p>}<mos-checkout [username]="auth.user()?.username ?? ''" (signOut)="logout()" />
 }@else{
  <main class="auth-screen"><form class="auth-card" (ngSubmit)="login()"><h1>MerchantOS POS</h1><p>Sign in with your cashier account.</p>
  <label for="username">Username</label><input id="username" name="username" autocomplete="username" maxlength="80" [(ngModel)]="username" required>
