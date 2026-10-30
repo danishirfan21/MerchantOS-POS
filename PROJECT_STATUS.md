@@ -1,3 +1,7 @@
+# Authentication and authorization milestone
+
+Branch `feature/auth-role-security`, based on POS main `68cc809edb2146e13632ff9cd316504b2dc5d25d`. Native ASP.NET Core cookie/password security, PostgreSQL identities/revocable sessions, explicit deny-by-default policies, cashier-owned receipts, scoped idempotency, CSRF, lockout and throttle implemented. Angular login/logout added. Local API/Angular builds and 21 existing unit tests pass. Full real authenticated CI pending. No public deployment or automatic merge. See docs/authentication.md.
+
 # MerchantOS POS — Project status
 
 ## Milestone 4: Visual QA and portfolio polish

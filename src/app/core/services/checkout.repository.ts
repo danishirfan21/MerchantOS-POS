@@ -10,6 +10,6 @@ export interface CheckoutPayload { items: { productId: string; quantity: number 
 export class CheckoutRepository {
   private readonly http = inject(HttpClient);
   checkout(payload: CheckoutPayload): Observable<Receipt> { return this.http.post<Receipt>('/api/checkout', payload); }
-  orders(): Observable<Receipt[]> { return this.http.get<Receipt[]>('/api/orders'); }
+  orders(): Observable<Receipt[]> { return this.http.get<Receipt[]>('/api/receipts'); }
   order(id: string): Observable<Receipt> { return this.http.get<Receipt>(`/api/orders/${encodeURIComponent(id)}`); }
 }

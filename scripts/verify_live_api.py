@@ -4,13 +4,15 @@ import os
 import urllib.error
 import urllib.parse
 import urllib.request
+from auth_client import Client
+auth=Client("ADMIN")
 
 BASE = os.environ.get('MERCHANTOS_API_URL', 'http://127.0.0.1:5080').rstrip('/')
 
 
 def get(path, expected=200):
     try:
-        with urllib.request.urlopen(BASE + path, timeout=10) as response:
+        with auth.opener.open(BASE + path, timeout=10) as response:
             status = response.status
             data = json.load(response)
     except urllib.error.HTTPError as error:
