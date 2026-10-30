@@ -13,7 +13,12 @@ checks=0
 def check(condition):
  global checks
  assert condition,'Security boundary assertion failed';checks+=1
-for path in ['/api/products','/api/categories','/api/inventory/p01','/api/orders','/api/orders/00000000-0000-0000-0000-000000000000','/api/receipts']:
+def snapshot():
+ return subprocess.check_output(['psql','-h','127.0.0.1','-p','5433','-U','merchantos','-d','merchantos','-Atc',"SELECT (SELECT count(*) FROM products),(SELECT sum(quantity_on_hand) FROM inventory_levels),(SELECT count(*) FROM orders),(SELECT sum(payable_halalas) FROM orders)"],text=True)
+before=snapshot()
+subprocess.run(['psql','-h','127.0.0.1','-p','5433','-U','merchantos','-d','merchantos','-v','ON_ERROR_STOP=1','-f',str(__import__('pathlib').Path(__file__).resolve().parents[1]/'db/migrations/004_identity.sql')],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+check(snapshot()==before)
+for path in ['/api/products' ,'/api/categories','/api/inventory/p01','/api/orders','/api/orders/00000000-0000-0000-0000-000000000000','/api/receipts']:
  check(raw(path)==401)
 check(raw('/api/checkout',{})==401)
 check(raw('/api/products',headers={'Cookie':'MerchantOS.Pos.Session=tampered','X-Role':'Administrator'})==401)
