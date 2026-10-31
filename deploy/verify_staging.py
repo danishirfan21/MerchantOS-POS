@@ -92,7 +92,7 @@ try:
  for role,target in [('admin','Administrator'),('cashier','Cashier'),('other','Administrator')]:operator('create',role,target)
  admin=Client('admin').login();cashier=Client('cashier').login();mvc=Client('admin').mvc_login();other=Client('other').mvc_login()
  check(admin.call('/api/orders')[0]==200);check(cashier.call('/api/admin/reports/sales')[0]==403);check(cashier.call('/api/checkout',{})[0]==400)
- cookie=next(c for c in cashier.jar if c.name=='MerchantOS.Pos.Session');check(cookie.secure);check(cookie.has_nonstandard_attr('HttpOnly'));check(cookie.get_nonstandard_attr('SameSite')=='Strict')
+ cookie=next(c for c in cashier.jar if c.name=='MerchantOS.Pos.Session');check(cookie.secure);check(any(k.lower()=='httponly' for k in cookie._rest));check({k.lower():str(v).lower() for k,v in cookie._rest.items()}.get('samesite')=='strict')
  # Each BFF request forwards only its own server-held identity, including under concurrency.
  with concurrent.futures.ThreadPoolExecutor() as pool:responses=list(pool.map(lambda c:c.mvc('/'),[mvc,other]*5))
  for i,(status,body,_) in enumerate(responses):check(status==200);check((secret/('admin_username' if i%2==0 else 'other_username')).read_text().encode() in body)
