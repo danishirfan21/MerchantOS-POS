@@ -1,4 +1,5 @@
 using MerchantOS.Api;
+using MerchantOS.Api.Security;
 using MerchantOS.Api.Contracts;
 using MerchantOS.Api.Data;
 using MerchantOS.Api.Domain;
@@ -9,12 +10,11 @@ var connectionString = builder.Configuration.GetConnectionString("MerchantDb")
     ?? throw new InvalidOperationException("ConnectionStrings:MerchantDb must be configured.");
 
 builder.Services.AddDbContext<MerchantDbContext>(options => options.UseNpgsql(connectionString));
-builder.Services.AddCors(options => options.AddPolicy("pos-dev", policy => policy
-    .WithOrigins("http://localhost:4200", "http://127.0.0.1:4200")
-    .AllowAnyHeader().AllowAnyMethod()));
-
+builder.AddSecurity();
 var app = builder.Build();
-app.UseCors("pos-dev");
+if (args.Contains("--bootstrap-user")) { await AuthSecurity.Bootstrap(app); return; }
+app.UseSecurity();
+app.MapSecurity();
 
 app.MapGet("/api/health", async (MerchantDbContext db, CancellationToken ct) =>
 {
@@ -28,7 +28,7 @@ app.MapGet("/api/health", async (MerchantDbContext db, CancellationToken ct) =>
     {
         return Results.Problem("Database is unavailable", statusCode: 503);
     }
-});
+}).AllowAnonymous();
 
 app.MapGet("/api/products", async (MerchantDbContext db, string? search, string? category, CancellationToken ct) =>
 {
@@ -49,7 +49,7 @@ app.MapGet("/api/products", async (MerchantDbContext db, string? search, string?
         p.Id, p.Sku, p.Name, p.NameAr, p.Category,
         p.PriceHalalas, p.Inventory.QuantityOnHand, p.Color, p.Icon, p.Badge)).ToListAsync(ct);
     return Results.Ok(products);
-});
+}).RequireAuthorization("Catalog");
 
 app.MapGet("/api/products/{id}", async (string id, MerchantDbContext db, CancellationToken ct) =>
 {
@@ -59,7 +59,7 @@ app.MapGet("/api/products/{id}", async (string id, MerchantDbContext db, Cancell
             p.PriceHalalas, p.Inventory.QuantityOnHand, p.Color, p.Icon, p.Badge))
         .SingleOrDefaultAsync(ct);
     return product is null ? Results.NotFound() : Results.Ok(product);
-});
+}).RequireAuthorization("Catalog");
 
 app.MapGet("/api/inventory/{productId}", async (string productId, MerchantDbContext db, CancellationToken ct) =>
 {
@@ -68,7 +68,7 @@ app.MapGet("/api/inventory/{productId}", async (string productId, MerchantDbCont
         .Select(i => new { i.ProductId, Stock = i.QuantityOnHand })
         .SingleOrDefaultAsync(ct);
     return inventory is null ? Results.NotFound() : Results.Ok(inventory);
-});
+}).RequireAuthorization("Catalog");
 
 app.MapGet("/api/categories", async (MerchantDbContext db, CancellationToken ct) =>
 {
@@ -80,11 +80,11 @@ app.MapGet("/api/categories", async (MerchantDbContext db, CancellationToken ct)
         .OrderBy(category => category.Name)
         .ToList();
     return Results.Ok(categories);
-});
+}).RequireAuthorization("Catalog");
 
 app.MapCheckout();
 
-// Demo-only transactional API: add authentication before public deployment.
+// Authenticated demo; public deployment remains outside scope.
 app.Run();
 
 public partial class Program { }

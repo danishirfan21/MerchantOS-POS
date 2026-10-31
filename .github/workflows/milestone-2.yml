@@ -6,7 +6,7 @@ on:
 
 jobs:
   integration:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     services:
       postgres:
@@ -21,6 +21,8 @@ jobs:
           --health-cmd "pg_isready -U merchantos -d merchantos"
           --health-interval 5s --health-timeout 3s --health-retries 15
     env:
+      ASPNETCORE_ENVIRONMENT: Development
+      Security__AllowLoopbackHttp: true
       ConnectionStrings__MerchantDb: Host=127.0.0.1;Port=5433;Database=merchantos;Username=merchantos;Password=merchantos_dev
       ASPNETCORE_URLS: http://127.0.0.1:5080
     steps:
@@ -43,9 +45,14 @@ jobs:
       - name: Apply checkout migration
         env:
           PGPASSWORD: merchantos_dev
-        run: psql -h 127.0.0.1 -p 5433 -U merchantos -d merchantos -v ON_ERROR_STOP=1 -f db/migrations/003_checkout.sql
+        run: |
+          for migration in db/migrations/*.sql; do psql -h 127.0.0.1 -p 5433 -U merchantos -d merchantos -v ON_ERROR_STOP=1 -f "$migration"; done
       - name: Build API
-        run: dotnet build services/merchant-api/MerchantOS.Api.csproj --configuration Release
+        run: |
+          dotnet build services/merchant-api/MerchantOS.Api.csproj --configuration Release
+          dotnet test services/merchant-api.Tests/MerchantOS.Api.Tests.csproj -c Release
+      - name: Provision isolated identities
+        run: python3 scripts/ci_accounts.py
       - name: Start API and verify live endpoints
         run: |
           dotnet run --project services/merchant-api/MerchantOS.Api.csproj --no-build --configuration Release > api.log 2>&1 &
@@ -66,8 +73,16 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Browser smoke against live API
         run: npm run test:e2e
-      - name: Upload browser artifacts
+      - name: Verify direct authentication and authorization boundaries
+        env:
+          PGPASSWORD: merchantos_dev
+        run: python3 scripts/verify_security.py
+      - name: Audit artifacts for credential exposure
+        id: artifact-audit
         if: always()
+        run: python3 scripts/audit_artifacts.py playwright-report test-results api.log
+      - name: Upload browser artifacts
+        if: always() && steps.artifact-audit.outcome == 'success' 
         uses: actions/upload-artifact@v4
         with:
           name: merchantos-browser-artifacts

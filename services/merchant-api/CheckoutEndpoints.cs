@@ -1,4 +1,5 @@
 using System.Data;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -20,7 +21,7 @@ public static class CheckoutEndpoints
 {
     public static void MapCheckout(this WebApplication app)
     {
-        app.MapPost("/api/checkout", Checkout);
+        app.MapPost("/api/checkout", Checkout).RequireAuthorization("Checkout");
         app.MapGet("/api/orders", async (MerchantDbContext db, CancellationToken ct) =>
         {
             var connection = (NpgsqlConnection)db.Database.GetDbConnection();
@@ -34,17 +35,30 @@ public static class CheckoutEndpoints
                 return Results.Ok(orders);
             }
             finally { await connection.CloseAsync(); }
-        });
-        app.MapGet("/api/orders/{id:guid}", async (Guid id, MerchantDbContext db, CancellationToken ct) =>
+        }).RequireAuthorization("Reporting");
+        app.MapGet("/api/orders/{id:guid}", async (Guid id, HttpContext context, MerchantDbContext db, CancellationToken ct) =>
         {
             var connection = (NpgsqlConnection)db.Database.GetDbConnection();
             await connection.OpenAsync(ct);
-            try { var receipt = await ReadReceipt(connection, null, id, ct); return receipt is null ? Results.NotFound() : Results.Ok(receipt); }
+            try {
+                if (!context.User.IsInRole("Administrator")) {
+                    await using var owner = new NpgsqlCommand("SELECT 1 FROM orders WHERE id=@id AND created_by=@user", connection);
+                    owner.Parameters.AddWithValue("id", id); owner.Parameters.AddWithValue("user", Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!));
+                    if (await owner.ExecuteScalarAsync(ct) is null) return Results.NotFound();
+                }
+                var receipt = await ReadReceipt(connection, null, id, ct); return receipt is null ? Results.NotFound() : Results.Ok(receipt); }
             finally { await connection.CloseAsync(); }
-        });
+        }).RequireAuthorization("Catalog");
+        app.MapGet("/api/receipts", async (HttpContext context, Npgsql.NpgsqlDataSource source, CancellationToken ct) => {
+            await using var cmd = source.CreateCommand("SELECT id,order_number,created_at,payable_halalas,payment_method FROM orders WHERE created_by=@user ORDER BY created_at DESC LIMIT 100");
+            cmd.Parameters.AddWithValue("user", Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!));
+            await using var reader = await cmd.ExecuteReaderAsync(ct); var rows = new List<object>();
+            while (await reader.ReadAsync(ct)) rows.Add(new { id=reader.GetGuid(0), orderNumber=reader.GetString(1), createdAt=reader.GetDateTime(2), payableHalalas=reader.GetInt64(3), paymentMethod=reader.GetString(4), currency="SAR", status="completed" });
+            return Results.Ok(rows);
+        }).RequireAuthorization("Checkout");
     }
 
-    private static async Task<IResult> Checkout(CheckoutRequest request, MerchantDbContext db, CancellationToken ct)
+    private static async Task<IResult> Checkout(CheckoutRequest request, HttpContext context, MerchantDbContext db, CancellationToken ct)
     {
         if (request.Items is null || request.Items.Count is < 1 or > 100 || request.Items.Any(i => string.IsNullOrWhiteSpace(i.ProductId) || i.Quantity <= 0 || i.Quantity > 1000)
             || request.Items.Select(i => i.ProductId).Distinct().Count() != request.Items.Count
@@ -54,6 +68,8 @@ public static class CheckoutEndpoints
             || (request.PaymentMethod == "card" && request.CardScenario is not ("success" or "decline")))
             return Results.BadRequest(new { code = "invalid_request", message = "Check items, discount, payment method and idempotency key." });
 
+        var userId = Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var scopedKey = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(userId + ":" + request.IdempotencyKey)));
         var canonical = JsonSerializer.Serialize(new { items = request.Items.OrderBy(i => i.ProductId), request.DiscountPercent, request.PaymentMethod, request.CashTenderedHalalas, request.CardScenario });
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
         var connection = (NpgsqlConnection)db.Database.GetDbConnection();
@@ -63,10 +79,10 @@ public static class CheckoutEndpoints
             await using var tx = await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
             // Serialize requests sharing a key; row locks below serialize competing stock purchases.
             await using (var lockCmd = new NpgsqlCommand("SELECT pg_advisory_xact_lock(hashtext(@key))", connection, tx))
-            { lockCmd.Parameters.AddWithValue("key", request.IdempotencyKey); await lockCmd.ExecuteNonQueryAsync(ct); }
+            { lockCmd.Parameters.AddWithValue("key", scopedKey); await lockCmd.ExecuteNonQueryAsync(ct); }
             await using (var keyCmd = new NpgsqlCommand("SELECT request_hash, order_id FROM checkout_idempotency WHERE key=@key", connection, tx))
             {
-                keyCmd.Parameters.AddWithValue("key", request.IdempotencyKey);
+                keyCmd.Parameters.AddWithValue("key", scopedKey);
                 await using var keyReader = await keyCmd.ExecuteReaderAsync(ct);
                 if (await keyReader.ReadAsync(ct))
                 {
@@ -98,15 +114,15 @@ public static class CheckoutEndpoints
                 return Results.Json(new { code = "card_declined", message = "Simulated card declined." }, statusCode: 402);
             var change = request.PaymentMethod == "cash" ? request.CashTenderedHalalas!.Value - payable : 0;
             var id = Guid.NewGuid(); var number = "MOS-" + id.ToString("N")[..12].ToUpperInvariant();
-            await using (var cmd = new NpgsqlCommand("INSERT INTO orders(id,order_number,currency,status,subtotal_halalas,discount_halalas,vat_halalas,payable_halalas,payment_method,change_halalas) VALUES (@id,@number,'SAR','completed',@subtotal,@discount,@vat,@payable,@method,@change)", connection, tx))
-            { cmd.Parameters.AddWithValue("id", id); cmd.Parameters.AddWithValue("number", number); cmd.Parameters.AddWithValue("subtotal", subtotal); cmd.Parameters.AddWithValue("discount", discount); cmd.Parameters.AddWithValue("vat", vat); cmd.Parameters.AddWithValue("payable", payable); cmd.Parameters.AddWithValue("method", request.PaymentMethod); cmd.Parameters.AddWithValue("change", change); await cmd.ExecuteNonQueryAsync(ct); }
+            await using (var cmd = new NpgsqlCommand("INSERT INTO orders(id,order_number,currency,status,subtotal_halalas,discount_halalas,vat_halalas,payable_halalas,payment_method,change_halalas,created_by) VALUES (@id,@number,'SAR','completed',@subtotal,@discount,@vat,@payable,@method,@change,@user)", connection, tx))
+            { cmd.Parameters.AddWithValue("id", id); cmd.Parameters.AddWithValue("number", number); cmd.Parameters.AddWithValue("user", userId); cmd.Parameters.AddWithValue("subtotal", subtotal); cmd.Parameters.AddWithValue("discount", discount); cmd.Parameters.AddWithValue("vat", vat); cmd.Parameters.AddWithValue("payable", payable); cmd.Parameters.AddWithValue("method", request.PaymentMethod); cmd.Parameters.AddWithValue("change", change); await cmd.ExecuteNonQueryAsync(ct); }
             foreach (var line in lines)
             {
                 await using var cmd = new NpgsqlCommand("INSERT INTO order_items(order_id,product_id,sku,name,quantity,unit_price_halalas) VALUES (@order,@product,@sku,@name,@quantity,@price); UPDATE inventory_levels SET quantity_on_hand=quantity_on_hand-@quantity WHERE product_id=@product", connection, tx);
                 cmd.Parameters.AddWithValue("order", id); cmd.Parameters.AddWithValue("product", line.ProductId); cmd.Parameters.AddWithValue("sku", line.Sku); cmd.Parameters.AddWithValue("name", line.Name); cmd.Parameters.AddWithValue("quantity", line.Quantity); cmd.Parameters.AddWithValue("price", line.UnitPriceHalalas); await cmd.ExecuteNonQueryAsync(ct);
             }
             await using (var cmd = new NpgsqlCommand("INSERT INTO payments(order_id,method,result,tendered_halalas,change_halalas) VALUES (@id,@method,'completed',@tendered,@change); INSERT INTO checkout_idempotency(key,request_hash,order_id) VALUES (@key,@hash,@id)", connection, tx))
-            { cmd.Parameters.AddWithValue("id", id); cmd.Parameters.AddWithValue("method", request.PaymentMethod); cmd.Parameters.AddWithValue("tendered", (object?)request.CashTenderedHalalas ?? DBNull.Value); cmd.Parameters.AddWithValue("change", change); cmd.Parameters.AddWithValue("key", request.IdempotencyKey); cmd.Parameters.AddWithValue("hash", hash); await cmd.ExecuteNonQueryAsync(ct); }
+            { cmd.Parameters.AddWithValue("id", id); cmd.Parameters.AddWithValue("method", request.PaymentMethod); cmd.Parameters.AddWithValue("tendered", (object?)request.CashTenderedHalalas ?? DBNull.Value); cmd.Parameters.AddWithValue("change", change); cmd.Parameters.AddWithValue("key", scopedKey); cmd.Parameters.AddWithValue("hash", hash); await cmd.ExecuteNonQueryAsync(ct); }
             await tx.CommitAsync(ct);
             var receipt = await ReadReceipt(connection, null, id, ct);
             return Results.Ok(receipt);

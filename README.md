@@ -1,3 +1,7 @@
+# Authentication milestone
+
+See [authentication architecture and setup](docs/authentication.md). Protected API routes now require genuine sessions and CSRF on unsafe methods. Development identities must be explicitly provisioned from environment credentials; there are no default accounts. Angular uses the same-origin API proxy and HttpOnly session cookies.
+
 # MerchantOS POS
 
 A bilingual English/Arabic retail checkout demo for a Saudi electronics store. The cashier UI uses Angular 22 and connects to an ASP.NET Core 10 API backed by PostgreSQL 17. Prices and transaction totals use integer halalas (SAR); the API reads current prices, locks inventory rows, records orders and simulated payments, and deducts stock in one database transaction.
