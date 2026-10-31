@@ -34,6 +34,7 @@ https://localhost:8443 {
  }
  handle /api/* {
   reverse_proxy https://pos-api:8443 {
+   header_up Host {hostport}
    header_up -Forwarded
    header_up X-Forwarded-For {http.request.remote.host}
    header_up X-Forwarded-Proto https
@@ -56,6 +57,7 @@ https://localhost:9443 {
   max_size 64KB
  }
  reverse_proxy https://admin:8443 {
+  header_up Host {hostport}
   header_up -Forwarded
   header_up X-Forwarded-For {http.request.remote.host}
   header_up X-Forwarded-Proto https

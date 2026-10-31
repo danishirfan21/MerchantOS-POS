@@ -19,8 +19,8 @@ def inspect(data,label):
  reasons=[]
  if any(s in data for s in secrets):reasons.append('ephemeral password')
  if re.search(rb'CfDJ[A-Za-z0-9_-]{60,}',data):reasons.append('protected cookie/CSRF value')
- if re.search(rb'-----BEGIN (?:ENCRYPTED |RSA |EC )?PRIVATE KEY-----',data):reasons.append('private key')
- if b'<encryptedSecret' in data:reasons.append('protected key XML')
+ if re.search(rb'-----BEGIN (?:ENCRYPTED |RSA |EC )?PRIVATE KEY-----[\s\\n]+[A-Za-z0-9+/=]{40,}',data):reasons.append('private key')
+ if re.search(rb'<encryptedSecret\s+decryptorType=',data):reasons.append('protected key XML')
  if data.startswith(b'PGDMP'):reasons.append('database dump')
  if reasons:findings.append(label+' ['+', '.join(reasons)+']')
 for arg in sys.argv[1:]:

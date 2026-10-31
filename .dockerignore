@@ -8,3 +8,8 @@ node_modules
 **/*key.pem
 test-results
 playwright-report
+
+**/*.key
+**/*.cms
+operational-evidence
+security-evidence

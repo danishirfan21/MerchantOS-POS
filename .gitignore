@@ -20,3 +20,6 @@ playwright-report/
 operational-evidence/
 
 security-evidence/
+
+*.key
+*.cms

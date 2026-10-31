@@ -92,9 +92,11 @@ try:
  invalid=run('run','--rm','--no-deps','-e','Operations__CertificatePath=/missing.pfx','pos-api','--rotate-keys',ok=False);check(invalid.returncode!=0)
  class NoRedirect(urllib.request.HTTPRedirectHandler):
   def redirect_request(self,*args):return None
- redirect=urllib.request.build_opener(urllib.request.ProxyHandler({}),NoRedirect())
+ redirect=urllib.request.build_opener(urllib.request.ProxyHandler({}),urllib.request.HTTPSHandler(context=ctx),NoRedirect())
  try:redirect.open('http://localhost:8080/')
  except urllib.error.HTTPError as e:check(e.code==308);check(e.headers['Location']=='https://localhost:8443/')
+ try:redirect.open('https://localhost:9443/Admin/Orders')
+ except urllib.error.HTTPError as e:check(e.code==302);check(e.headers['Location'].startswith('https://localhost:9443/Account/Login'))
  for role,target in [('admin','Administrator'),('cashier','Cashier'),('other','Administrator')]:operator('create',role,target)
  admin=Client('admin').login();cashier=Client('cashier').login();mvc=Client('admin').mvc_login();other=Client('other').mvc_login()
  check(admin.call('/api/orders')[0]==200);check(cashier.call('/api/admin/reports/sales')[0]==403);check(cashier.call('/api/checkout',{})[0]==400)
