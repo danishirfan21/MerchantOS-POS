@@ -48,6 +48,12 @@ class Client:
   try:value=json.loads(b) if b else None
   except ValueError:value=b.decode()
   return s,value,h
+ def idempotent(self,path,payload):
+  for attempt in range(3):
+   result=self.call(path,payload)
+   if result[0] not in [0,502,503]:return result
+   time.sleep(2)
+  return result
  def mvc_login(self):
   import re,urllib.parse
   with self.http.open('https://localhost:9443/Account/Login') as r:html=r.read().decode()
@@ -130,7 +136,7 @@ try:
  # DB loss: liveness persists, readiness fails, safe errors omit credentials and recover without login loss.
  run('stop','db');check(probe('/api/health/live')[0]==200);check(probe('/health/live',admin=True)[0]==200);check(probe('/api/health/ready')[0]==503);check(probe('/health/ready',admin=True)[0]==503)
  failure=mvc.mvc('/Admin/Orders');check(failure[0] in [500,503]);check(b'Password=' not in failure[1]);run('start','db');wait_ready();check(mvc.mvc('/Admin/Orders')[0]==200)
- check(cashier.call('/api/checkout',checkout)[1]['id']==replay[1]['id']);check(admin.call('/api/admin/inventory/p17/adjustments',adjustment)[1]['newQuantity']==before+5)
+ recovered=cashier.idempotent('/api/checkout',checkout);assert recovered[0]==200,'Checkout recovery status '+str(recovered[0]);check(recovered[1]['id']==replay[1]['id']);recovered_adjustment=admin.idempotent('/api/admin/inventory/p17/adjustments',adjustment);assert recovered_adjustment[0]==200,'Stock recovery status '+str(recovered_adjustment[0]);check(recovered_adjustment[1]['newQuantity']==before+5)
  # Migration replay and concurrent runners retain all business/auth/audit data.
  before_restore=snapshot()
  with concurrent.futures.ThreadPoolExecutor() as pool:list(pool.map(lambda _:run('run','--rm','migrate'),range(2)))
@@ -160,17 +166,26 @@ try:
  cid=uuid.uuid4().hex;s,b,h=probe('/api/products',client=admin.http,headers={'X-Correlation-ID':cid});check(h.get('X-Correlation-ID')==cid);check(admin.call('/api/ops/metrics')[0]==200)
  cid=uuid.uuid4().hex;check(probe('/Admin/Orders',admin=True,client=mvc.http,headers={'X-Correlation-ID':cid})[0]==200)
  lines=run('logs','--no-color','admin','pos-api').stdout.splitlines();check(any('-admin ' in line and cid in line for line in lines));check(any('-pos-api ' in line and cid in line for line in lines))
+ # Real maintenance loops remove expired records without touching valid sessions.
+ sql("INSERT INTO auth_sessions(id,user_id,expires_at) SELECT repeat('F',64),id,now()-interval '1 second' FROM auth_users WHERE username='staging-admin'; INSERT INTO admin_ticket_sessions(id_hash,user_id,protected_ticket,expires_at) SELECT repeat('F',64),id,decode('00','hex'),now()-interval '1 second' FROM auth_users WHERE username='staging-admin'",'merchant_restore_drill')
+ cleanup_deadline=time.monotonic()+75
+ while time.monotonic()<cleanup_deadline:
+  remaining=sql("SELECT (SELECT count(*) FROM auth_sessions WHERE id=repeat('F',64))+(SELECT count(*) FROM admin_ticket_sessions WHERE id_hash=repeat('F',64))",'merchant_restore_drill')
+  if remaining=='0':break
+  time.sleep(1)
+ check(remaining=='0');check(mvc.mvc('/Admin/Orders')[0]==200)
  # Expired POS sessions immediately block their BFF session; restart cannot renew expiry.
  sql("UPDATE auth_sessions SET expires_at=now()-interval '1 second' WHERE user_id=(SELECT id FROM auth_users WHERE username='staging-other')",'merchant_restore_drill')
  check(b'Sign In' in other.mvc('/Admin/Orders')[1]);other=Client('other').mvc_login()
  sql("UPDATE admin_ticket_sessions SET expires_at=now()-interval '1 second' WHERE user_id=(SELECT id FROM auth_users WHERE username='staging-other')",'merchant_restore_drill')
  check(b'Sign In' in other.mvc('/Admin/Orders')[1]);other=Client('other').mvc_login()
  # Browser logout revokes backend and durable local ticket, including after restart.
- import re,urllib.parse
+ import re,urllib.parse,copy
+ stolen=copy.deepcopy(other.jar)
  page=other.mvc('/')[1].decode();token=re.search(r'name="__RequestVerificationToken"[^>]*value="([^"]+)"',page)[1]
  request=urllib.request.Request('https://localhost:9443/Account/Logout',data=urllib.parse.urlencode({'__RequestVerificationToken':token}).encode())
  with other.http.open(request) as response:check(response.status==200)
- run('restart','admin');wait_ready();check(b'Sign In' in other.mvc('/Admin/Orders')[1]);other=Client('other').mvc_login()
+ run('restart','admin');wait_ready();check(b'Sign In' in probe('/Admin/Orders',admin=True,client=opener(stolen))[1]);check(b'Sign In' in other.mvc('/Admin/Orders')[1]);other=Client('other').mvc_login()
  # Expiry and authoritative operator revocation, role changes and password changes remain effective.
  operator('role','other','Cashier');check(other.mvc('/Admin/Orders')[0]==200) # Follows the safe redirect to login.
  check(b'Sign In' in other.mvc('/Admin/Orders')[1]);operator('role','other','Administrator');other=Client('other').mvc_login();operator('disable','other');check(b'Sign In' in other.mvc('/Admin/Orders')[1]);operator('password','cashier');check(cashier.call('/api/auth/me')[0]==401)

@@ -64,7 +64,8 @@ public static class OperationalSecurity {
    try{await next();}
    catch(Exception ex)when(ex is not OperationCanceledException){
     app.Logger.LogError("Request failed; category {Category}; component {Component}",ex.GetType().Name,app.Environment.ApplicationName);
-    if(!context.Response.HasStarted){context.Response.Clear();context.Response.StatusCode=ex is BadHttpRequestException bad?bad.StatusCode:ex is HttpRequestException or TimeoutException || ex is Npgsql.NpgsqlException and not Npgsql.PostgresException?503:500;context.Response.Headers.CacheControl="no-store";context.Response.Headers["X-Correlation-ID"]=correlation;await context.Response.WriteAsJsonAsync(new{message="Service unavailable or operation result uncertain. Retry reads; for checkout/stock changes retain the same request key.",correlationId=correlation});}
+    var unavailable=ex is HttpRequestException or TimeoutException || ex is Npgsql.NpgsqlException and not Npgsql.PostgresException || ex is Npgsql.PostgresException pg && (pg.SqlState.StartsWith("08",StringComparison.Ordinal)||pg.SqlState is "57P01" or "57P02" or "57P03");
+    if(!context.Response.HasStarted){context.Response.Clear();context.Response.StatusCode=ex is BadHttpRequestException bad?bad.StatusCode:unavailable?503:500;context.Response.Headers["X-Content-Type-Options"]="nosniff";context.Response.Headers["Referrer-Policy"]="same-origin";if(enabled){context.Response.Headers["Strict-Transport-Security"]="max-age=86400";context.Response.Headers["X-Frame-Options"]="DENY";}context.Response.Headers.CacheControl="no-store";context.Response.Headers["X-Correlation-ID"]=correlation;await context.Response.WriteAsJsonAsync(new{message="Service unavailable or operation result uncertain. Retry reads; for checkout/stock changes retain the same request key.",correlationId=correlation});}
    }
    finally{
     var route=(context.GetEndpoint() as Microsoft.AspNetCore.Routing.RouteEndpoint)?.RoutePattern.RawText??"unmatched";
