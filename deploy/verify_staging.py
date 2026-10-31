@@ -28,7 +28,7 @@ def wait_ready():
   time.sleep(1)
  raise RuntimeError('Staging readiness did not recover within 90s')
 ctx=ssl.create_default_context(cafile=str(secret/'ca.crt'))
-def opener(jar=None):return urllib.request.build_opener(urllib.request.ProxyHandler({}),urllib.request.HTTPSHandler(context=ctx),urllib.request.HTTPCookieProcessor(jar or http.cookiejar.CookieJar()))
+def opener(jar=None):return urllib.request.build_opener(urllib.request.ProxyHandler({}),urllib.request.HTTPSHandler(context=ctx),urllib.request.HTTPCookieProcessor(jar if jar is not None else http.cookiejar.CookieJar()))
 def probe(path,payload=None,admin=False,client=None,headers=None):
  url=('https://localhost:9443' if admin else 'https://localhost:8443')+path
  req=urllib.request.Request(url,data=json.dumps(payload).encode() if payload is not None else None,headers={'Content-Type':'application/json',**(headers or {})})
@@ -157,6 +157,8 @@ try:
  restored.unlink();run('up','-d','pos-api','admin');wait_ready();check(mvc.mvc('/Admin/Orders')[0]==200);check(cashier.call('/api/orders/'+order)[0]==200);check(snapshot('merchant_restore_drill')==before_restore)
  # Correlation and safe operational signals.
  cid=uuid.uuid4().hex;s,b,h=probe('/api/products',client=admin.http,headers={'X-Correlation-ID':cid});check(h.get('X-Correlation-ID')==cid);check(admin.call('/api/ops/metrics')[0]==200)
+ cid=uuid.uuid4().hex;check(probe('/Admin/Orders',admin=True,client=mvc.http,headers={'X-Correlation-ID':cid})[0]==200)
+ lines=run('logs','--no-color','admin','pos-api').stdout.splitlines();check(any('-admin ' in line and cid in line for line in lines));check(any('-pos-api ' in line and cid in line for line in lines))
  # Expired POS sessions immediately block their BFF session; restart cannot renew expiry.
  sql("UPDATE auth_sessions SET expires_at=now()-interval '1 second' WHERE user_id=(SELECT id FROM auth_users WHERE username='staging-other')",'merchant_restore_drill')
  check(b'Sign In' in other.mvc('/Admin/Orders')[1]);other=Client('other').mvc_login()

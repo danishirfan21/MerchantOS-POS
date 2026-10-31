@@ -51,8 +51,10 @@ services:
       PGPASSFILE: /run/secrets/pgpass
       SEED_DEMO: ${SEED_DEMO:-false}
     volumes:
-      - ${STAGING_DIR}/secrets:/run/secrets:ro
-      - ${STAGING_DIR}/backups:/backups
+      - ${STAGING_DIR}/secrets/pgpass:/run/secrets/pgpass:ro
+      - ${STAGING_DIR}/secrets/pos_db_password:/run/secrets/pos_db_password:ro
+      - ${STAGING_DIR}/secrets/admin_db_password:/run/secrets/admin_db_password:ro
+      - ${STAGING_DIR}/secrets/ca.crt:/run/secrets/ca.crt:ro
     depends_on: {db: {condition: service_healthy}}
     networks: [private]
     tmpfs: ['/tmp:mode=1777,size=128m']

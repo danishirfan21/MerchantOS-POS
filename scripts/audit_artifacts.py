@@ -6,7 +6,7 @@ findings=[];count=0
 def inspect(data,label):
  global count
  count+=1
- if any(s in data for s in secrets) or re.search(rb'CfDJ[A-Za-z0-9_-]{60,}',data):findings.append(label)
+ if any(s in data for s in secrets) or re.search(rb'CfDJ[A-Za-z0-9_-]{60,}|-----BEGIN (?:ENCRYPTED |RSA |EC )?PRIVATE KEY-----|<encryptedSecret|PGDMP',data):findings.append(label)
  if data.startswith(b'PK\x03\x04'):
   with zipfile.ZipFile(io.BytesIO(data)) as archive:
    for name in archive.namelist():
