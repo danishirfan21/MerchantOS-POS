@@ -26,7 +26,8 @@ def wait_ready():
  while time.monotonic()<deadline:
   if probe('/api/health/ready')[0]==200 and probe('/health/ready',admin=True)[0]==200:return
   time.sleep(1)
- raise RuntimeError('Staging readiness did not recover within 90s')
+ diagnostic=subprocess.run(['curl','-v','--max-time','5','--cacert',str(secret/'ca.crt'),'https://localhost:8443/api/health/ready'],text=True,capture_output=True)
+ raise RuntimeError('Staging readiness did not recover within 90s; TLS-only diagnostic: '+diagnostic.stderr[-2500:])
 ctx=ssl.create_default_context(cafile=str(secret/'ca.crt'))
 def opener(jar=None):return urllib.request.build_opener(urllib.request.ProxyHandler({}),urllib.request.HTTPSHandler(context=ctx),urllib.request.HTTPCookieProcessor(jar if jar is not None else http.cookiejar.CookieJar()))
 def probe(path,payload=None,admin=False,client=None,headers=None):

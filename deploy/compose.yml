@@ -110,6 +110,7 @@ services:
       - ${STAGING_DIR}/secrets/tls.key:/run/secrets/tls.key:ro
     networks:
       private: {ipv4_address: 172.29.70.10}
+      edge: {}
     depends_on: {admin: {condition: service_healthy}}
   backup:
     image: ${COMPOSE_PROJECT_NAME:-merchantos_staging}-ops
@@ -140,6 +141,7 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
 networks:
+  edge: {}
   private:
     internal: true
     ipam: {config: [{subnet: 172.29.70.0/24}]}
