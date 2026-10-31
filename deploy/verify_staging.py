@@ -161,7 +161,11 @@ try:
  restored=work/'keys-recovered.tar';subprocess.run(['openssl','cms','-decrypt','-binary','-inform','DER','-in',str(work/'protected-keys.cms'),'-inkey',str(secret/'backup_key.pem'),'-out',str(restored)],check=True)
  for directory in ['pos-keys','admin-keys']:shutil.rmtree(work/directory)
  with tarfile.open(restored) as archive:archive.extractall(work,filter='data')
- restored.unlink();run('up','-d','pos-api','admin');wait_ready();check(mvc.mvc('/Admin/Orders')[0]==200);check(cashier.call('/api/orders/'+order)[0]==200);check(snapshot('merchant_restore_drill')==before_restore)
+ restored.unlink()
+ for directory in ['pos-keys','admin-keys']:
+  (work/directory).chmod(0o700)
+  for file in (work/directory).glob('*.xml'):file.chmod(0o600)
+ run('up','-d','pos-api','admin');wait_ready();check(mvc.mvc('/Admin/Orders')[0]==200);check(cashier.call('/api/orders/'+order)[0]==200);check(snapshot('merchant_restore_drill')==before_restore)
  # Correlation and safe operational signals.
  cid=uuid.uuid4().hex;s,b,h=probe('/api/products',client=admin.http,headers={'X-Correlation-ID':cid});check(h.get('X-Correlation-ID')==cid);check(admin.call('/api/ops/metrics')[0]==200)
  cid=uuid.uuid4().hex;check(probe('/Admin/Orders',admin=True,client=mvc.http,headers={'X-Correlation-ID':cid})[0]==200)
@@ -174,6 +178,9 @@ try:
   if remaining=='0':break
   time.sleep(1)
  check(remaining=='0');check(mvc.mvc('/Admin/Orders')[0]==200)
+ # A copied ciphertext cannot substitute another user's ticket reference.
+ sql("UPDATE admin_ticket_sessions SET protected_ticket=(SELECT protected_ticket FROM admin_ticket_sessions WHERE user_id=(SELECT id FROM auth_users WHERE username='staging-admin') LIMIT 1) WHERE user_id=(SELECT id FROM auth_users WHERE username='staging-other')",'merchant_restore_drill')
+ check(b'Sign In' in other.mvc('/Admin/Orders')[1]);other=Client('other').mvc_login()
  # Expired POS sessions immediately block their BFF session; restart cannot renew expiry.
  sql("UPDATE auth_sessions SET expires_at=now()-interval '1 second' WHERE user_id=(SELECT id FROM auth_users WHERE username='staging-other')",'merchant_restore_drill')
  check(b'Sign In' in other.mvc('/Admin/Orders')[1]);other=Client('other').mvc_login()
