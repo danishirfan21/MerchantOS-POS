@@ -18,3 +18,5 @@ playwright-report/
 *.env
 
 operational-evidence/
+
+security-evidence/

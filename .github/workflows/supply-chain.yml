@@ -1,0 +1,34 @@
+name: Container and dependency evidence
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '24'
+      - name: Restore locked JavaScript and .NET dependencies
+        run: |
+          npm ci
+          dotnet restore services/merchant-api/MerchantOS.Api.csproj
+      - name: Build immutable-base release containers
+        run: |
+          docker build -f services/merchant-api/Dockerfile -t merchantos-review-api .
+          docker build -f deploy/Dockerfile.web -t merchantos-review-web .
+          docker build -f deploy/Dockerfile.ops -t merchantos-review-ops .
+      - name: Install checksum-verified Trivy 0.76.1
+        run: bash deploy/install-trivy.sh
+      - name: Collect unsuppressed package and runtime image findings
+        run: python3 deploy/security-review.py --project services/merchant-api/MerchantOS.Api.csproj --image merchantos-review-api --image merchantos-review-web --image merchantos-review-ops
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: supply-chain-evidence
+          path: security-evidence/
