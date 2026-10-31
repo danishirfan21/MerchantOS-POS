@@ -1,0 +1,61 @@
+{
+ admin off
+ auto_https off
+ persist_config off
+ log {
+  format json
+ }
+}
+http://localhost:8080 {
+ redir https://localhost:8443{uri} 308
+}
+http://localhost:9080 {
+ redir https://localhost:9443{uri} 308
+}
+https://localhost:8443 {
+ tls /run/secrets/tls.crt /run/secrets/tls.key
+ request_body {
+  max_size 64KB
+ }
+ header {
+  Strict-Transport-Security "max-age=86400"
+  X-Content-Type-Options nosniff
+  Referrer-Policy same-origin
+  X-Frame-Options DENY
+ }
+ handle /edge-live {
+  respond "alive" 200
+ }
+ handle /api/* {
+  reverse_proxy https://pos-api:8443 {
+   header_up -Forwarded
+   header_up X-Forwarded-For {http.request.remote.host}
+   header_up X-Forwarded-Proto https
+   header_up -X-Forwarded-Host
+   transport http {
+    tls_trust_pool file /run/secrets/ca.crt
+   }
+  }
+ }
+ handle {
+  header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+  root * /srv
+  try_files {path} /index.html
+  file_server
+ }
+}
+https://localhost:9443 {
+ tls /run/secrets/tls.crt /run/secrets/tls.key
+ request_body {
+  max_size 64KB
+ }
+ reverse_proxy https://admin:8443 {
+  header_up -Forwarded
+  header_up X-Forwarded-For {http.request.remote.host}
+  header_up X-Forwarded-Proto https
+  header_up -X-Forwarded-Host
+  transport http {
+    tls_trust_pool file /run/secrets/ca.crt
+   }
+ }
+}

@@ -1,0 +1,155 @@
+name: ${COMPOSE_PROJECT_NAME:-merchantos_staging}
+x-app: &app
+  user: "${STAGING_UID:-1654}"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs: ['/tmp:mode=1777,size=64m']
+  restart: unless-stopped
+  stop_grace_period: 30s
+  mem_limit: 512m
+  cpus: 1.0
+  networks: [private]
+x-security: &security
+  ASPNETCORE_ENVIRONMENT: Staging
+  Operations__Enabled: 'true'
+  Operations__TrustedProxy: 172.29.70.10
+  Operations__CertificatePath: /run/secrets/dp.pfx
+  Operations__CertificatePasswordFile: /run/secrets/dp_password
+  Operations__CaPath: /run/secrets/ca.crt
+  Kestrel__Certificates__Default__Path: /run/secrets/tls.pfx
+  Kestrel__Certificates__Default__PasswordFile: /run/secrets/pfx_password
+  ASPNETCORE_URLS: https://+:8443
+  AllowedHosts: localhost;127.0.0.1;pos-api;admin
+services:
+  db:
+    image: postgres:17-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b
+    environment:
+      POSTGRES_DB: merchantos
+      POSTGRES_USER: merchantos
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    volumes:
+      - database:/var/lib/postgresql/data
+      - ${STAGING_DIR:?required}/secrets/db_password:/run/secrets/db_password:ro
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U merchantos -d merchantos']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [private]
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 1.0
+    stop_grace_period: 30s
+  migrate:
+    user: "${STAGING_UID:-1654}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    build: {context: .., dockerfile: deploy/Dockerfile.ops}
+    image: ${COMPOSE_PROJECT_NAME:-merchantos_staging}-ops
+    environment:
+      PGHOST: db
+      PGDATABASE: merchantos
+      PGUSER: merchantos
+      PGPASSFILE: /run/secrets/pgpass
+      SEED_DEMO: ${SEED_DEMO:-false}
+    volumes:
+      - ${STAGING_DIR}/secrets/pgpass:/run/secrets/pgpass:ro
+      - ${STAGING_DIR}/secrets/pos_db_password:/run/secrets/pos_db_password:ro
+      - ${STAGING_DIR}/secrets/admin_db_password:/run/secrets/admin_db_password:ro
+      - ${STAGING_DIR}/secrets/ca.crt:/run/secrets/ca.crt:ro
+    depends_on: {db: {condition: service_healthy}}
+    networks: [private]
+    tmpfs: ['/tmp:mode=1777,size=128m']
+    restart: 'no'
+  pos-api:
+    <<: *app
+    container_name: ${COMPOSE_PROJECT_NAME:-merchantos_staging}-pos-api
+    build: {context: .., dockerfile: services/merchant-api/Dockerfile}
+    image: ${COMPOSE_PROJECT_NAME:-merchantos_staging}-pos-api
+    environment:
+      <<: *security
+      ConnectionStrings__MerchantDbFile: /run/secrets/pos_connection
+      Operations__KeyPath: /keys
+    volumes:
+      - ${STAGING_DIR}/pos-keys:/keys
+      - ${STAGING_DIR}/secrets/pos_connection:/run/secrets/pos_connection:ro
+      - ${STAGING_DIR}/secrets/dp.pfx:/run/secrets/dp.pfx:ro
+      - ${STAGING_DIR}/secrets/dp_password:/run/secrets/dp_password:ro
+      - ${STAGING_DIR}/secrets/tls.pfx:/run/secrets/tls.pfx:ro
+      - ${STAGING_DIR}/secrets/pfx_password:/run/secrets/pfx_password:ro
+      - ${STAGING_DIR}/secrets/ca.crt:/run/secrets/ca.crt:ro
+    depends_on: {migrate: {condition: service_completed_successfully}}
+  admin:
+    <<: *app
+    container_name: ${COMPOSE_PROJECT_NAME:-merchantos_staging}-admin
+    build: {context: '${ADMIN_CONTEXT:-../../MerchantOS-Admin}', dockerfile: Dockerfile}
+    image: ${COMPOSE_PROJECT_NAME:-merchantos_staging}-admin
+    environment:
+      <<: *security
+      ConnectionStrings__AdminSessionsFile: /run/secrets/admin_connection
+      Operations__BackendHost: pos-api
+      Operations__KeyPath: /keys
+      PosApi__BaseUrl: https://pos-api:8443/
+    volumes:
+      - ${STAGING_DIR}/admin-keys:/keys
+      - ${STAGING_DIR}/secrets/admin_connection:/run/secrets/admin_connection:ro
+      - ${STAGING_DIR}/secrets/dp.pfx:/run/secrets/dp.pfx:ro
+      - ${STAGING_DIR}/secrets/dp_password:/run/secrets/dp_password:ro
+      - ${STAGING_DIR}/secrets/tls.pfx:/run/secrets/tls.pfx:ro
+      - ${STAGING_DIR}/secrets/pfx_password:/run/secrets/pfx_password:ro
+      - ${STAGING_DIR}/secrets/ca.crt:/run/secrets/ca.crt:ro
+    depends_on: {pos-api: {condition: service_healthy}}
+  web:
+    <<: *app
+    container_name: ${COMPOSE_PROJECT_NAME:-merchantos_staging}-web
+    build: {context: .., dockerfile: deploy/Dockerfile.web}
+    image: ${COMPOSE_PROJECT_NAME:-merchantos_staging}-web
+    environment: {XDG_CONFIG_HOME: /tmp/config, XDG_DATA_HOME: /tmp/data}
+    ports: ['127.0.0.1:8443:8443','127.0.0.1:9443:9443','127.0.0.1:8080:8080','127.0.0.1:9080:9080']
+    volumes:
+      - ${STAGING_DIR}/secrets/ca.crt:/run/secrets/ca.crt:ro
+      - ${STAGING_DIR}/secrets/tls.crt:/run/secrets/tls.crt:ro
+      - ${STAGING_DIR}/secrets/tls.key:/run/secrets/tls.key:ro
+    networks:
+      private: {ipv4_address: 172.29.70.10}
+      edge: {}
+    depends_on: {admin: {condition: service_healthy}}
+  backup:
+    user: "${STAGING_UID:-1654}"
+    image: ${COMPOSE_PROJECT_NAME:-merchantos_staging}-ops
+    profiles: [tools]
+    command: [/ops/backup.py]
+    environment: {PGHOST: db, PGDATABASE: merchantos, PGUSER: merchantos, PGPASSFILE: /run/secrets/pgpass}
+    volumes:
+      - ${STAGING_DIR}/secrets/pgpass:/run/secrets/pgpass:ro
+      - ${STAGING_DIR}/secrets/backup_cert.pem:/run/secrets/backup_cert.pem:ro
+      - ${STAGING_DIR}/backups:/backups
+    tmpfs: ['/tmp:mode=1777,size=128m']
+    networks: [private]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  restore:
+    user: "${STAGING_UID:-1654}"
+    image: ${COMPOSE_PROJECT_NAME:-merchantos_staging}-ops
+    profiles: [tools]
+    command: [/ops/restore.py, /backups/SELECT_ENCRYPTED_BACKUP, --target, merchant_restore_drill, --confirm-isolated]
+    environment: {PGHOST: db, PGDATABASE: merchantos, PGUSER: merchantos, PGPASSFILE: /run/secrets/pgpass}
+    volumes:
+      - ${STAGING_DIR}/secrets/pgpass:/run/secrets/pgpass:ro
+      - ${BACKUP_PRIVATE_KEY_FILE:-${STAGING_DIR}/secrets/backup_key.pem}:/run/secrets/backup_key.pem:ro
+      - ${STAGING_DIR}/backups:/backups:ro
+    tmpfs: ['/tmp:mode=1777,size=128m']
+    networks: [private]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+networks:
+  edge: {}
+  private:
+    internal: true
+    ipam: {config: [{subnet: 172.29.70.0/24}]}
+volumes:
+  database:

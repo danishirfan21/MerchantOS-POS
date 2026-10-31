@@ -75,3 +75,8 @@ Checkout accepts product IDs/quantities, an allowed discount (0, 5 or 10), cash 
 ## Historical reporting (Milestone 6)
 
 Administrator-only historical Orders, exact sales metrics, store-local trends, payment breakdown, top products and bounded UTF-8 CSV exports. See [reporting contracts and financial/date definitions](docs/reporting.md). Reports query PostgreSQL directly; Cashier receipt ownership and Angular behavior remain unchanged. Apply additive index migration006 after existing migrations. [POS PR #5](https://github.com/danishirfan21/MerchantOS-POS/pull/5) and dependent Admin PR #7 stay unmerged for review.
+
+
+## Milestone 7 — operational staging
+
+Implementation in new unmerged feature PRs. See [staging operations and incident runbook](docs/staging-operations.md) and [evidence/readiness matrix](docs/staging-readiness.md). Persistent protected keys, durable Admin tickets, strict local HTTPS Compose, safe migrations, encrypted backup/restore, health/readiness and correlation-safe logging are implemented. Final container/recovery and dependency findings are tracked in the matrix. No public deployment or automatic merge.

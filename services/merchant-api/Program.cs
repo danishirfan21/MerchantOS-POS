@@ -1,20 +1,33 @@
 using MerchantOS.Api;
+using MerchantOS.Operations;
 using MerchantOS.Api.Security;
 using MerchantOS.Api.Contracts;
 using MerchantOS.Api.Data;
 using MerchantOS.Api.Domain;
 using Microsoft.EntityFrameworkCore;
 
+if(args.Contains("--healthcheck")){Environment.ExitCode=await OperationalSecurity.HealthProbe("/api/health/ready");return;}
 var builder = WebApplication.CreateBuilder(args);
+OperationalSecurity.Configure(builder,"POS");
+builder.Services.AddHostedService<SessionMaintenance>();
 var connectionString = builder.Configuration.GetConnectionString("MerchantDb")
     ?? throw new InvalidOperationException("ConnectionStrings:MerchantDb must be configured.");
 
 builder.Services.AddDbContext<MerchantDbContext>(options => options.UseNpgsql(connectionString));
 builder.AddSecurity();
 var app = builder.Build();
+OperationalSecurity.InitializeKeys(app,args);
+if(args.Contains("--rotate-keys")||args.Contains("--revoke-keys"))return;
+if(args.Contains("--account")){await AccountCommand.Run(app);return;}
 if (args.Contains("--bootstrap-user")) { await AuthSecurity.Bootstrap(app); return; }
+app.UseOperationalBoundary();
 app.UseSecurity();
 app.MapSecurity();
+app.MapGet("/api/health/live",()=>Results.Ok(new{status="alive"})).AllowAnonymous();
+app.MapGet("/api/health/ready",async(Npgsql.NpgsqlDataSource source,CancellationToken ct)=>{
+ try{await using var cmd=source.CreateCommand("SELECT to_regclass('admin_ticket_sessions') IS NOT NULL AND to_regclass('admin_audit') IS NOT NULL AND to_regclass('auth_sessions') IS NOT NULL AND to_regclass('ix_orders_chronological') IS NOT NULL");cmd.CommandTimeout=2;return (bool)(await cmd.ExecuteScalarAsync(ct))!?Results.Ok(new{status="ready"}):Results.StatusCode(503);}catch{return Results.StatusCode(503);}
+}).AllowAnonymous();
+app.MapGet("/api/ops/metrics",(OperationalMetrics metrics)=>Results.Ok(metrics.Snapshot())).RequireAuthorization("Reporting");
 
 app.MapGet("/api/health", async (MerchantDbContext db, CancellationToken ct) =>
 {

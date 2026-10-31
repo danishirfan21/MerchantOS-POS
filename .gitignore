@@ -9,3 +9,14 @@ playwright-report/
 .env
 *.user
 *.suo
+
+.staging/
+*.pfx
+*.dump
+*.dump.cms
+*key.pem
+*.env
+
+operational-evidence/
+
+security-evidence/

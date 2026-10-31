@@ -1,12 +1,12 @@
 """Fail closed before upload if artifacts contain ephemeral passwords or protected cookie/CSRF values."""
 import base64,io,os,re,sys,zipfile
 from pathlib import Path
-secrets=[v.encode() for k,v in os.environ.items() if k.startswith('TEST_') and k.endswith('_PASSWORD') and len(v)>=14]
+secrets=[v.encode() for k,v in os.environ.items() if k.startswith(('TEST_','STAGING_')) and k.endswith('_PASSWORD') and len(v)>=14]
 findings=[];count=0
 def inspect(data,label):
  global count
  count+=1
- if any(s in data for s in secrets) or re.search(rb'CfDJ[A-Za-z0-9_-]{60,}',data):findings.append(label)
+ if any(s in data for s in secrets) or re.search(rb'CfDJ[A-Za-z0-9_-]{60,}|-----BEGIN (?:ENCRYPTED |RSA |EC )?PRIVATE KEY-----|<encryptedSecret|PGDMP',data):findings.append(label)
  if data.startswith(b'PK\x03\x04'):
   with zipfile.ZipFile(io.BytesIO(data)) as archive:
    for name in archive.namelist():
