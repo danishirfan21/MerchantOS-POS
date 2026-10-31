@@ -190,7 +190,8 @@ try:
  check(b'Sign In' in other.mvc('/Admin/Orders')[1]);other=Client('other').mvc_login()
  # Browser logout revokes backend and durable local ticket, including after restart.
  import re,urllib.parse,copy
- stolen=copy.deepcopy(other.jar)
+ stolen=http.cookiejar.CookieJar()
+ for cookie in other.jar:stolen.set_cookie(copy.copy(cookie))
  page=other.mvc('/')[1].decode();token=re.search(r'name="__RequestVerificationToken"[^>]*value="([^"]+)"',page)[1]
  request=urllib.request.Request('https://localhost:9443/Account/Logout',data=urllib.parse.urlencode({'__RequestVerificationToken':token}).encode())
  with other.http.open(request) as response:check(response.status==200)

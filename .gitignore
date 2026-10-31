@@ -23,3 +23,6 @@ security-evidence/
 
 *.key
 *.cms
+
+__pycache__/
+*.pyc

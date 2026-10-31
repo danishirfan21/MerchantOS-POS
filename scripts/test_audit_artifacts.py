@@ -7,7 +7,7 @@ class AuditTests(unittest.TestCase):
    r=subprocess.run([sys.executable,str(script),str(p)],env={**os.environ,'STAGING_TEST_PASSWORD':'synthetic-audit-password'},capture_output=True)
    self.assertEqual(r.returncode!=0,blocked,r.stdout.decode()+r.stderr.decode())
  def test_secrets_remain_blocked(self):
-  for payload in [b'synthetic-audit-password',b'CfDJ'+b'A'*65,b'-----BEGIN PRIVATE KEY-----\n'+b'A'*64,b'<encryptedSecret decryptorType="Native">secret</encryptedSecret>',b'PGDMPbinary']:
+  for payload in [b'synthetic-audit-password',b'CfDJ'+b'A'*65,b'-----BEGIN PRIVATE KEY-----\n'+b'A'*64,b'<encrypted'+b'Secret decryptorType="Native">secret</encryptedSecret>',b'PGDMPbinary']:
    with self.subTest(kind=payload[:5]):self.check_content(payload,True)
  def test_embedded_report_is_decoded_before_audit(self):
   for payload,blocked in [(b'synthetic-audit-password',True),(b'CfDJ'+b'A'*65,True),(b'safe report',False)]:
