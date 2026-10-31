@@ -83,6 +83,7 @@ app.MapGet("/api/categories", async (MerchantDbContext db, CancellationToken ct)
 }).RequireAuthorization("Catalog");
 
 app.MapCheckout();
+app.MapManagement();
 
 // Authenticated demo; public deployment remains outside scope.
 app.Run();
