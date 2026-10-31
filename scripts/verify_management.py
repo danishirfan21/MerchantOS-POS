@@ -75,4 +75,12 @@ before=snapshot();subprocess.run(['psql','-h','127.0.0.1','-p','5433','-U','merc
 # Restore catalog/stock via audited APIs; tests never touch a real developer database.
 check(admin.request(product,update(current(),**{k:original[k] for k in ['name','nameAr','category','priceHalalas']}))[0]==200)
 check(admin.request(adjust,stock('correction',original['stock']))[0]==200)
+# New write routes reject disabled, role-changed, expired and revoked sessions.
+probe=Client('ADMIN');data=update(current());stock_probe=stock('restock',1)
+sql("UPDATE auth_users SET enabled=false WHERE username='ci-admin'");check(probe.request(product,data)[0]==401)
+sql("UPDATE auth_users SET enabled=true,role='Cashier' WHERE username='ci-admin'");check(probe.request(product,data)[0]==403)
+sql("UPDATE auth_users SET role='Administrator' WHERE username='ci-admin'")
+sql("UPDATE auth_sessions SET expires_at=now()-interval '1 second' WHERE user_id=(SELECT id FROM auth_users WHERE username='ci-admin')")
+check(probe.request(product,data)[0]==401)
+probe=Client('ADMIN');check(probe.request('/api/auth/logout',{})[0]==204);check(probe.request(adjust,stock_probe)[0]==401)
 print(f'Management integration passed: {count} real authorization, validation, concurrency, idempotency, receipt, migration and audit integrity checks.')
