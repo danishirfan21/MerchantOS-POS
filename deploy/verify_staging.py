@@ -80,6 +80,14 @@ try:
  check(probe('/')[0]==200);check(probe('/api/products')[0]==401);check(probe('/api/health/live')[0]==200);check(probe('/health/live',admin=True)[0]==200)
  # Spoofed forwarded headers at the TLS edge cannot alter external scheme or source identity.
  check(probe('/api/products',headers={'X-Forwarded-For':'203.0.113.8','X-Forwarded-Proto':'http'})[0]==401)
+ direct="import urllib.request,urllib.error,ssl; r=urllib.request.Request('https://pos-api:8443/api/health/live',headers={'X-Forwarded-For':'203.0.113.8'}); ctx=ssl.create_default_context(cafile='/run/secrets/ca.crt');\ntry: urllib.request.urlopen(r,context=ctx)\nexcept urllib.error.HTTPError as e: print(e.code)"
+ check(run('run','--rm','--no-deps','migrate','-c',direct).stdout.strip()=='400')
+ invalid=run('run','--rm','--no-deps','-e','Operations__CertificatePath=/missing.pfx','pos-api','--rotate-keys',ok=False);check(invalid.returncode!=0)
+ class NoRedirect(urllib.request.HTTPRedirectHandler):
+  def redirect_request(self,*args):return None
+ redirect=urllib.request.build_opener(urllib.request.ProxyHandler({}),NoRedirect())
+ try:redirect.open('http://localhost:8080/')
+ except urllib.error.HTTPError as e:check(e.code==308);check(e.headers['Location']=='https://localhost:8443/')
  for role,target in [('admin','Administrator'),('cashier','Cashier'),('other','Administrator')]:operator('create',role,target)
  admin=Client('admin').login();cashier=Client('cashier').login();mvc=Client('admin').mvc_login();other=Client('other').mvc_login()
  check(admin.call('/api/orders')[0]==200);check(cashier.call('/api/admin/reports/sales')[0]==403);check(cashier.call('/api/checkout',{})[0]==400)
@@ -93,6 +101,7 @@ try:
   p=managed();return {'operation':operation,'quantity':q,'reason':'Isolated staging drill','stockVersion':p['stockVersion'],'idempotencyKey':key or str(uuid.uuid4())}
  def product():
   p=managed();return admin.call('/api/admin/products/p17',{k:p[k] for k in ['name','nameAr','category','priceHalalas','version']})
+ measure('authentication',lambda:Client('other').login().call('/api/auth/me'))
  measure('catalog',lambda:cashier.call('/api/products'));measure('product-edit',product)
  adjustment=stock(5);before=managed()['stock'];check(admin.call('/api/admin/inventory/p17/adjustments',adjustment)[0]==200);check(managed()['stock']==before+5);check(admin.call('/api/admin/inventory/p17/adjustments',adjustment)[0]==200);check(managed()['stock']==before+5)
  measure('inventory-adjustment',lambda:admin.call('/api/admin/inventory/p17/adjustments',stock(1)))
@@ -151,6 +160,8 @@ try:
  # Expired POS sessions immediately block their BFF session; restart cannot renew expiry.
  sql("UPDATE auth_sessions SET expires_at=now()-interval '1 second' WHERE user_id=(SELECT id FROM auth_users WHERE username='staging-other')",'merchant_restore_drill')
  check(b'Sign In' in other.mvc('/Admin/Orders')[1]);other=Client('other').mvc_login()
+ sql("UPDATE admin_ticket_sessions SET expires_at=now()-interval '1 second' WHERE user_id=(SELECT id FROM auth_users WHERE username='staging-other')",'merchant_restore_drill')
+ check(b'Sign In' in other.mvc('/Admin/Orders')[1]);other=Client('other').mvc_login()
  # Browser logout revokes backend and durable local ticket, including after restart.
  import re,urllib.parse
  page=other.mvc('/')[1].decode();token=re.search(r'name="__RequestVerificationToken"[^>]*value="([^"]+)"',page)[1]
@@ -159,7 +170,7 @@ try:
  run('restart','admin');wait_ready();check(b'Sign In' in other.mvc('/Admin/Orders')[1]);other=Client('other').mvc_login()
  # Expiry and authoritative operator revocation, role changes and password changes remain effective.
  operator('role','other','Cashier');check(other.mvc('/Admin/Orders')[0]==200) # Follows the safe redirect to login.
- check(b'Sign In' in other.mvc('/Admin/Orders')[1]);operator('disable','other');operator('password','cashier');check(cashier.call('/api/auth/me')[0]==401)
+ check(b'Sign In' in other.mvc('/Admin/Orders')[1]);operator('role','other','Administrator');other=Client('other').mvc_login();operator('disable','other');check(b'Sign In' in other.mvc('/Admin/Orders')[1]);operator('password','cashier');check(cashier.call('/api/auth/me')[0]==401)
  check(admin.call('/api/auth/logout',{})[0]==204);check(admin.call('/api/auth/me')[0]==401)
  # Login throttling cannot be evaded by forged XFF at the public edge. Run last.
  anon=Client('admin');anon.csrf();statuses=[]
