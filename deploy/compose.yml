@@ -4,7 +4,7 @@ x-app: &app
   read_only: true
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
-  tmpfs: [/tmp:mode=1777,size=64m]
+  tmpfs: ['/tmp:mode=1777,size=64m']
   restart: unless-stopped
   stop_grace_period: 30s
   mem_limit: 512m
@@ -55,7 +55,7 @@ services:
       - ${STAGING_DIR}/backups:/backups
     depends_on: {db: {condition: service_healthy}}
     networks: [private]
-    tmpfs: [/tmp:mode=1777,size=128m]
+    tmpfs: ['/tmp:mode=1777,size=128m']
     restart: 'no'
   pos-api:
     <<: *app
@@ -118,7 +118,7 @@ services:
       - ${STAGING_DIR}/secrets/pgpass:/run/secrets/pgpass:ro
       - ${STAGING_DIR}/secrets/backup_cert.pem:/run/secrets/backup_cert.pem:ro
       - ${STAGING_DIR}/backups:/backups
-    tmpfs: [/tmp:mode=1777,size=128m]
+    tmpfs: ['/tmp:mode=1777,size=128m']
     networks: [private]
     read_only: true
     cap_drop: [ALL]
@@ -132,7 +132,7 @@ services:
       - ${STAGING_DIR}/secrets/pgpass:/run/secrets/pgpass:ro
       - ${BACKUP_PRIVATE_KEY_FILE:-${STAGING_DIR}/secrets/backup_key.pem}:/run/secrets/backup_key.pem:ro
       - ${STAGING_DIR}/backups:/backups:ro
-    tmpfs: [/tmp:mode=1777,size=128m]
+    tmpfs: ['/tmp:mode=1777,size=128m']
     networks: [private]
     read_only: true
     cap_drop: [ALL]
