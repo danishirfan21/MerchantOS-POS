@@ -70,4 +70,8 @@ Checkout accepts product IDs/quantities, an allowed discount (0, 5 or 10), cash 
 
 ## Milestone5 administration API
 
-[Management contracts](docs/management.md): Administrator-only product editing, transactional inventory adjustments and immutable audit history. Angular remains cashier-only and contains no editing controls. Names/category/price can change; existing IDs/SKUs and receipt snapshots remain unchanged. Apply additive migration005 after identity004; never reset populated data. CI verifies real authorization, concurrency, idempotency and audit rollback. Security PR#3 is merged. Management [PR#4](https://github.com/danishirfan21/MerchantOS-POS/pull/4) stays unmerged pending review; Admin PR#6 pins its tested backend.
+[Management contracts](docs/management.md): Administrator-only product editing, transactional inventory adjustments and immutable audit history. Angular remains cashier-only and contains no editing controls. Names/category/price can change; existing IDs/SKUs and receipt snapshots remain unchanged. Apply additive migration005 after identity004; never reset populated data. CI verifies real authorization, concurrency, idempotency and audit rollback. Security PR #3 is merged. Management [PR #4](https://github.com/danishirfan21/MerchantOS-POS/pull/4) merged as ad73c8e406fc1b42c8fdf4fd88b721d08f2ce320; Admin PR #6 pins its tested backend.
+
+## Historical reporting (Milestone 6)
+
+Administrator-only historical Orders, exact sales metrics, store-local trends, payment breakdown, top products and bounded UTF-8 CSV exports. See [reporting contracts and financial/date definitions](docs/reporting.md). Reports query PostgreSQL directly; Cashier receipt ownership and Angular behavior remain unchanged. Apply additive index migration006 after existing migrations. [POS PR #5](https://github.com/danishirfan21/MerchantOS-POS/pull/5) and dependent Admin PR #7 stay unmerged for review.
