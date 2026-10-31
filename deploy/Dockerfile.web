@@ -1,0 +1,15 @@
+FROM node:24-bookworm-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS build
+WORKDIR /src
+COPY package*.json ./
+RUN npm ci
+COPY angular.json tsconfig*.json ./
+COPY src/ ./src/
+COPY public/ ./public/
+RUN npm run build
+FROM caddy:2-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5
+RUN apk add --no-cache curl
+COPY --from=build /src/dist/merchantos-pos/browser/ /srv/
+COPY deploy/Caddyfile /etc/caddy/Caddyfile
+USER 1654
+EXPOSE 8443 9443 8080 9080
+HEALTHCHECK --interval=10s --timeout=5s --start-period=10s CMD curl -fsS --cacert /run/secrets/ca.crt https://localhost:8443/edge-live >/dev/null

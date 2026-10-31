@@ -4,47 +4,34 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
 jobs:
   integration:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_DB: merchantos
-          POSTGRES_USER: merchantos
-          POSTGRES_PASSWORD: merchantos_dev
-        ports:
-          - 5433:5432
-        options: >-
-          --health-cmd "pg_isready -U merchantos -d merchantos"
-          --health-interval 5s --health-timeout 3s --health-retries 15
     env:
       ASPNETCORE_ENVIRONMENT: Development
       Security__AllowLoopbackHttp: true
-      ConnectionStrings__MerchantDb: Host=127.0.0.1;Port=5433;Database=merchantos;Username=merchantos;Password=merchantos_dev
       ASPNETCORE_URLS: http://127.0.0.1:5080
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: '10.0.x'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           cache: npm
+      - name: Create isolated database with ephemeral credentials
+        run: python3 deploy/ci_database.py
       - name: Initialize PostgreSQL
-        env:
-          PGPASSWORD: merchantos_dev
         run: |
           psql -h 127.0.0.1 -p 5433 -U merchantos -d merchantos -v ON_ERROR_STOP=1 -f db/init/001_schema.sql
           psql -h 127.0.0.1 -p 5433 -U merchantos -d merchantos -v ON_ERROR_STOP=1 -f db/init/002_seed.sql
           test "$(psql -h 127.0.0.1 -p 5433 -U merchantos -d merchantos -Atc 'SELECT COUNT(*) FROM products')" = 30
           test "$(psql -h 127.0.0.1 -p 5433 -U merchantos -d merchantos -Atc 'SELECT COUNT(*) FROM inventory_levels')" = 30
       - name: Apply checkout migration
-        env:
-          PGPASSWORD: merchantos_dev
         run: |
           for migration in db/migrations/*.sql; do psql -h 127.0.0.1 -p 5433 -U merchantos -d merchantos -v ON_ERROR_STOP=1 -f "$migration"; done
       - name: Build API
@@ -74,16 +61,10 @@ jobs:
       - name: Browser smoke against live API
         run: npm run test:e2e
       - name: Verify historical reporting and query plans
-        env:
-          PGPASSWORD: merchantos_dev
         run: python3 scripts/verify_reporting.py
       - name: Verify administrative transactions and concurrency
-        env:
-          PGPASSWORD: merchantos_dev
         run: python3 scripts/verify_management.py
       - name: Verify direct authentication and authorization boundaries
-        env:
-          PGPASSWORD: merchantos_dev
         run: python3 scripts/verify_security.py
       - name: Audit artifacts for credential exposure
         id: artifact-audit
@@ -91,7 +72,7 @@ jobs:
         run: python3 scripts/audit_artifacts.py playwright-report test-results api.log report-query-plan.json
       - name: Upload browser artifacts
         if: always() && steps.artifact-audit.outcome == 'success' 
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: merchantos-browser-artifacts
           path: |
