@@ -16,3 +16,5 @@ playwright-report/
 *.dump.cms
 *key.pem
 *.env
+
+operational-evidence/

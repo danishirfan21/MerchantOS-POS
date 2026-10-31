@@ -29,6 +29,6 @@ if os.getuid()==0:
 # Ephemeral test secrets masked and exported only within GitHub Actions; never print them elsewhere.
 if os.environ.get('GITHUB_ACTIONS')=='true':
  with open(os.environ['GITHUB_ENV'],'a') as f:
-  for role in ['admin','cashier','other']:
-   value=values[role+'_password'];print('::add-mask::'+value);f.write('STAGING_'+role.upper()+'_PASSWORD='+value+'\n')
+  for name,value in values.items():
+   print('::add-mask::'+value);f.write('STAGING_'+name.upper()+'='+value+'\n')
 print('Private local staging material created. CA trust is local only; no public services configured.')

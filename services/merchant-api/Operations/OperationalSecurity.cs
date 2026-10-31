@@ -64,12 +64,12 @@ public static class OperationalSecurity {
    try{await next();}
    catch(Exception ex)when(ex is not OperationCanceledException){
     app.Logger.LogError("Request failed; category {Category}; component {Component}",ex.GetType().Name,app.Environment.ApplicationName);
-    if(!context.Response.HasStarted){context.Response.Clear();context.Response.StatusCode=ex is HttpRequestException or TimeoutException || ex is Npgsql.NpgsqlException and not Npgsql.PostgresException?503:500;context.Response.Headers.CacheControl="no-store";context.Response.Headers["X-Correlation-ID"]=correlation;await context.Response.WriteAsJsonAsync(new{message="Service unavailable or operation result uncertain. Retry reads; for checkout/stock changes retain the same request key.",correlationId=correlation});}
+    if(!context.Response.HasStarted){context.Response.Clear();context.Response.StatusCode=ex is BadHttpRequestException bad?bad.StatusCode:ex is HttpRequestException or TimeoutException || ex is Npgsql.NpgsqlException and not Npgsql.PostgresException?503:500;context.Response.Headers.CacheControl="no-store";context.Response.Headers["X-Correlation-ID"]=correlation;await context.Response.WriteAsJsonAsync(new{message="Service unavailable or operation result uncertain. Retry reads; for checkout/stock changes retain the same request key.",correlationId=correlation});}
    }
    finally{
     var route=(context.GetEndpoint() as Microsoft.AspNetCore.Routing.RouteEndpoint)?.RoutePattern.RawText??"unmatched";
     app.Services.GetRequiredService<OperationalMetrics>().Record(route,context.Response.StatusCode,watch.Elapsed.TotalMilliseconds);
-    app.Logger.LogInformation("Request {Route} status {Status} durationMs {DurationMs} component {Component}",route,context.Response.StatusCode,Math.Round(watch.Elapsed.TotalMilliseconds,2),app.Environment.ApplicationName);
+    app.Logger.LogInformation("Request {Method} {Route} status {Status} durationMs {DurationMs} component {Component}",context.Request.Method,route,context.Response.StatusCode,Math.Round(watch.Elapsed.TotalMilliseconds,2),app.Environment.ApplicationName);
    }
   });
  }
