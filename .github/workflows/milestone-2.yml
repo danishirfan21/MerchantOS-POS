@@ -73,6 +73,10 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Browser smoke against live API
         run: npm run test:e2e
+      - name: Verify administrative transactions and concurrency
+        env:
+          PGPASSWORD: merchantos_dev
+        run: python3 scripts/verify_management.py
       - name: Verify direct authentication and authorization boundaries
         env:
           PGPASSWORD: merchantos_dev

@@ -6,7 +6,7 @@ See [authentication architecture and setup](docs/authentication.md). Protected A
 
 A bilingual English/Arabic retail checkout demo for a Saudi electronics store. The cashier UI uses Angular 22 and connects to an ASP.NET Core 10 API backed by PostgreSQL 17. Prices and transaction totals use integer halalas (SAR); the API reads current prices, locks inventory rows, records orders and simulated payments, and deducts stock in one database transaction.
 
-> **Demo only:** The API has no authentication or authorization. Do not expose it to the public internet. Card approval/decline is deterministic simulation; no card details are collected or processed.
+> **Demo only:** The API requires authenticated sessions and explicit role policies. Do not expose it to the public internet. Card approval/decline is deterministic simulation; no card details are collected or processed.
 
 ## Features
 
@@ -28,12 +28,14 @@ Actual live API/PostgreSQL browser captures at the requested viewports. CI also 
 Install Docker (with Compose), Node.js 24 and npm. From the repository root:
 
 ```sh
-docker compose up -d --build
+docker compose up -d db
+# Apply all migrations and provision accounts as documented in docs/authentication.md.
+# Run the API as a host process over HTTPS (or explicit loopback-only Development HTTP).
 npm ci
 npm start
 ```
 
-Open `http://localhost:4200`. The Angular dev server proxies `/api` to `http://127.0.0.1:5080`. Check API health at `http://localhost:5080/api/health`. Compose starts PostgreSQL, applies `db/migrations/003_checkout.sql` through a one-shot migrator, then starts the API. The migration preserves an existing database volume; the initial catalog seed contains 30 products and inventory rows. Compose credentials are for local demo use only.
+Open `http://localhost:4200`. The Angular dev server proxies `/api` to `http://127.0.0.1:5080`. Check API health at `http://localhost:5080/api/health`. Use Compose for PostgreSQL; the legacy container API HTTP path is not compatible with the strict loopback transport exception. Apply all db/migrations/*.sql in numeric order. The migration preserves an existing database volume; the initial catalog seed contains 30 products and inventory rows. Compose credentials are for local demo use only.
 
 ## Verify
 
@@ -65,3 +67,7 @@ The Playwright suite requires the API/database running and a Chromium browser (`
 | `GET /api/orders/{id}` | Receipt |
 
 Checkout accepts product IDs/quantities, an allowed discount (0, 5 or 10), cash tender or a deterministic simulated card scenario, and an idempotency key. The server ignores any frontend price assumptions. Discount and VAT are rounded separately to the nearest halala, half up. Failed payments leave inventory unchanged. See [PROJECT_STATUS.md](PROJECT_STATUS.md) for verified checks and limitations.
+
+## Milestone5 administration API
+
+[Management contracts](docs/management.md): Administrator-only product editing, transactional inventory adjustments and immutable audit history. Angular remains cashier-only and contains no editing controls. Names/category/price can change; existing IDs/SKUs and receipt snapshots remain unchanged. Apply additive migration005 after identity004; never reset populated data. CI verifies real authorization, concurrency, idempotency and audit rollback. Security PR#3 is merged. Management [PR#4](https://github.com/danishirfan21/MerchantOS-POS/pull/4) stays unmerged pending review; Admin PR#6 pins its tested backend.

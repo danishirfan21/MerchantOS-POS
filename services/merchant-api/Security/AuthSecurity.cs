@@ -42,6 +42,7 @@ public static class AuthSecurity
         builder.Services.AddAuthorization(options => {
             // Every new endpoint must opt into an explicit policy (or justified AllowAnonymous).
             options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAssertion(_ => false).Build();
+            foreach (var policy in new[] { "ProductManagement", "InventoryManagement", "AuditRead" }) options.AddPolicy(policy, p => p.RequireRole("Administrator"));
             options.AddPolicy("Catalog", p => p.RequireRole("Administrator", "Cashier"));
             options.AddPolicy("Reporting", p => p.RequireRole("Administrator"));
             options.AddPolicy("Checkout", p => p.RequireRole("Cashier"));
