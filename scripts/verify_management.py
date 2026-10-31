@@ -24,13 +24,17 @@ for path in [product,'/api/admin/audit']:
  check(anonymous(path)==401);check(cash.request(path)[0]==403)
 for path in [product,adjust]:
  check(anonymous(path,{})==401);check(cash.request(path,{})[0]==403);check(admin.request(path,{},csrf=False)[0]==400)
-original=current();orders_before=sql("SELECT coalesce(jsonb_agg(to_jsonb(x))::text,'[]') FROM (SELECT * FROM order_items ORDER BY id) x")
+original=current()
+old_sale=cash.request('/api/checkout',dict(items=[dict(productId=pid,quantity=1)],discountPercent=0,paymentMethod='card',cardScenario='success',cashTenderedHalalas=None,idempotencyKey=str(uuid.uuid4())))
+check(old_sale[0]==200)
+orders_before=sql("SELECT coalesce(jsonb_agg(to_jsonb(x))::text,'[]') FROM (SELECT * FROM order_items ORDER BY id) x")
 r=admin.request(product,update(original,name='CI updated product',priceHalalas=12345));check(r[0]==200);check(r[1]['version']==original['version']+1)
 check(admin.request('/api/products/'+pid)[1]['priceHalalas']==12345)
 check(admin.request(product,update(original))[0]==409)
 for kw in [dict(priceHalalas=-1),dict(priceHalalas=100000001),dict(name=' '),dict(name='x'*241),dict(category='Unknown'),dict(sku='attempt'),dict(actorId=str(uuid.uuid4())),dict(priceHalalas=1.5)]:
  check(admin.request(product,update(current(),**kw))[0]==400)
 check(admin.request('/api/admin/products/missing',update(current()))[0]==404)
+check(admin.request('/api/orders/'+old_sale[1]['id'])[1]['items'][0]['unitPriceHalalas']==original['priceHalalas'])
 check(sql("SELECT coalesce(jsonb_agg(to_jsonb(x))::text,'[]') FROM (SELECT * FROM order_items ORDER BY id) x")==orders_before)
 actor=admin.request('/api/auth/me')[1]['id'];check(history()[0]['actorId']==actor)
 # Audit insertion failure must roll back both types of business writes.
@@ -62,7 +66,12 @@ check(checkout(str(uuid.uuid4()))[0]==200);check(admin.request(adjust,stock('cor
 b=current();correction=stock('correction',25,b['stockVersion'])
 with concurrent.futures.ThreadPoolExecutor() as pool:
  f=pool.submit(checkout,str(uuid.uuid4()));g=pool.submit(admin.request,adjust,correction);sale=f.result();cor=g.result()
-check(sale[0]==200);check(cor[0] in [200,409]);check(current()['stock']==(24 if cor[0]==200 else b['stock']-1))
+check(sale[0]==200);check(sale[1]['items'][0]['unitPriceHalalas']==12345);check(cor[0] in [200,409]);check(current()['stock']==(24 if cor[0]==200 else b['stock']-1))
+# One remaining unit: a sale racing damage cannot make stock negative.
+check(admin.request(adjust,stock('correction',1))[0]==200);loss=stock('damage',1)
+with concurrent.futures.ThreadPoolExecutor() as pool:
+ f=pool.submit(checkout,str(uuid.uuid4()));g=pool.submit(admin.request,adjust,loss);last_sale=f.result();last_loss=g.result()
+check(sorted([last_sale[0],last_loss[0]])==[200,409]);check(current()['stock']==0)
 # Product updates are independently optimistic under concurrent administrators.
 p=current()
 with concurrent.futures.ThreadPoolExecutor() as pool:rs=list(pool.map(lambda x:x[0].request(product,update(p,name=x[1])),zip(admins,['Concurrent A','Concurrent B'])))
@@ -78,7 +87,7 @@ check(admin.request(adjust,stock('correction',original['stock']))[0]==200)
 # New write routes reject disabled, role-changed, expired and revoked sessions.
 probe=Client('ADMIN');data=update(current());stock_probe=stock('restock',1)
 sql("UPDATE auth_users SET enabled=false WHERE username='ci-admin'");check(probe.request(product,data)[0]==401)
-sql("UPDATE auth_users SET enabled=true,role='Cashier' WHERE username='ci-admin'");check(probe.request(product,data)[0]==403)
+sql("UPDATE auth_users SET enabled=true,role='Cashier' WHERE username='ci-admin'");probe=Client('ADMIN');check(probe.request(product,data)[0]==403)
 sql("UPDATE auth_users SET role='Administrator' WHERE username='ci-admin'")
 sql("UPDATE auth_sessions SET expires_at=now()-interval '1 second' WHERE user_id=(SELECT id FROM auth_users WHERE username='ci-admin')")
 check(probe.request(product,data)[0]==401)
