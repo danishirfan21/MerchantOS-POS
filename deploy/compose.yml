@@ -42,6 +42,10 @@ services:
     cpus: 1.0
     stop_grace_period: 30s
   migrate:
+    user: "${STAGING_UID:-1654}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     build: {context: .., dockerfile: deploy/Dockerfile.ops}
     image: ${COMPOSE_PROJECT_NAME:-merchantos_staging}-ops
     environment:
@@ -113,6 +117,7 @@ services:
       edge: {}
     depends_on: {admin: {condition: service_healthy}}
   backup:
+    user: "${STAGING_UID:-1654}"
     image: ${COMPOSE_PROJECT_NAME:-merchantos_staging}-ops
     profiles: [tools]
     command: [/ops/backup.py]
@@ -127,6 +132,7 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
   restore:
+    user: "${STAGING_UID:-1654}"
     image: ${COMPOSE_PROJECT_NAME:-merchantos_staging}-ops
     profiles: [tools]
     command: [/ops/restore.py, /backups/SELECT_ENCRYPTED_BACKUP, --target, merchant_restore_drill, --confirm-isolated]
