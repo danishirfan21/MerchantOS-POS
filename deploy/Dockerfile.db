@@ -1,0 +1,7 @@
+# Same supported PostgreSQL image/entrypoint; rebuild its upstream gosu helper with patched Go.
+FROM golang:1.27.3-alpine@sha256:d200d2dd76b03a99b52651fd1325aff7dcd35422c35c01bac56571b0507f3deb AS gosu
+ENV CGO_ENABLED=0 GOTOOLCHAIN=local GOMAXPROCS=2 GOFLAGS=-p=2
+RUN go install -trimpath -ldflags='-s -w -X main.gosuVersion=1.19' github.com/tianon/gosu@v1.19
+FROM postgres:17-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b
+RUN apk upgrade --no-cache
+COPY --from=gosu /go/bin/gosu /usr/local/bin/gosu

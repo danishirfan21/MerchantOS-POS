@@ -22,11 +22,14 @@ jobs:
         run: |
           docker build -f services/merchant-api/Dockerfile -t merchantos-review-api .
           docker build -f deploy/Dockerfile.web -t merchantos-review-web .
+          docker build -f deploy/Dockerfile.db -t merchantos-review-db .
           docker build -f deploy/Dockerfile.ops -t merchantos-review-ops .
       - name: Install checksum-verified Trivy 0.76.1
         run: bash deploy/install-trivy.sh
       - name: Collect unsuppressed package and runtime image findings
-        run: python3 deploy/security-review.py --project services/merchant-api/MerchantOS.Api.csproj --image merchantos-review-api --image merchantos-review-web --image merchantos-review-ops --image postgres:17-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b
+        run: python3 deploy/security-review.py --project services/merchant-api/MerchantOS.Api.csproj --image merchantos-review-api --image merchantos-review-web --image merchantos-review-ops --image merchantos-review-db
+      - name: Enforce isolated staging vulnerability policy
+        run: python3 deploy/security-gate.py --evidence security-evidence
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always()
         with:

@@ -2,7 +2,8 @@
 import os,secrets,subprocess,time,pathlib,json
 if os.environ.get('GITHUB_ACTIONS')!='true':raise SystemExit('CI-only database fixture')
 password=secrets.token_urlsafe(36);print('::add-mask::'+password,flush=True)
-image=json.loads((pathlib.Path(__file__).parent/'images.json').read_text())['postgres'];name='merchantos-ci-'+os.environ['GITHUB_RUN_ID']
+image='merchantos-ci-db';subprocess.run(['docker','build','-f',str(pathlib.Path(__file__).parent/'Dockerfile.db'),'-t',image,str(pathlib.Path(__file__).resolve().parents[1])],check=True,stdout=subprocess.DEVNULL)
+name='merchantos-ci-'+os.environ['GITHUB_RUN_ID']
 env={**os.environ,'POSTGRES_PASSWORD':password,'PGPASSWORD':password}
 subprocess.run(['docker','run','--rm','-d','--name',name,'-p','127.0.0.1:5433:5432','-e','POSTGRES_DB=merchantos','-e','POSTGRES_USER=merchantos','-e','POSTGRES_PASSWORD',image],env=env,check=True,stdout=subprocess.DEVNULL)
 for _ in range(40):
