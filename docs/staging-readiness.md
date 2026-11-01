@@ -1,28 +1,41 @@
 # Milestone 7 readiness evidence
 
-Decision pending final container/recovery and supply-chain evidence. Public deployment is blocked.
+**GO for isolated, single-instance localhost staging using disposable demo data. Public production: BLOCKED.** No public deployment or merge was performed.
 
-| Capability | Status | Evidence / boundary |
+Verified runtime commits: POS `1238815f38e848716491dce0d9a3c6ae72e536bd`, Admin `ee653aa1faf81ba9d9621be67ca76733e609a9fa`. Admin CI pins that exact POS feature commit. Later documentation-only updates retain this runtime pin.
+
+- [POS regression CI](https://github.com/danishirfan21/MerchantOS-POS/actions/runs/41243400068)
+- [Admin regression CI](https://github.com/danishirfan21/MerchantOS-Admin/actions/runs/41243440542)
+- [Real HTTPS Compose recovery drill](https://github.com/danishirfan21/MerchantOS-Admin/actions/runs/41243440548), [audited results/logs](https://github.com/danishirfan21/MerchantOS-Admin/actions/runs/41243440548/artifacts/13058004439)
+- [POS package/image scan](https://github.com/danishirfan21/MerchantOS-POS/actions/runs/41243400011), [Admin package/image scan](https://github.com/danishirfan21/MerchantOS-Admin/actions/runs/41243440648)
+
+| Capability | Status | Executed evidence / boundary |
 |---|---|---|
-| Native authentication and roles | Verified | Existing security regression CI retained; POS remains identity authority. |
-| HTTPS and proxy trust | Partially verified | Real container drill implemented; final run required. Local CA only. |
-| Durable Admin sessions | Partially verified | Encrypted PostgreSQL native ticket store implemented; final restart/restore drill required. |
-| Key protection | Partially verified | Native certificate-encrypted persistent rings; startup fail-closed tests pass. Container rotation/recovery pending. |
-| Secret isolation | Partially verified | Random file-mounted credentials; masked CI values; credential audit gates operational log uploads. Docker host remains trusted. |
-| Migration safety | Partially verified | Ordered/checksummed ledger, session advisory lock, per-file transaction; concurrent/replay/rollback drill pending. |
-| Backup and restore | Partially verified | Encrypted dump, checksum manifest and isolated-target restore; executed final drill pending. |
-| Health and readiness | Verified locally | New .NET tests distinguish live/ready, enforce mandatory staging configuration; real outage recovery pending. |
-| Logging and metrics | Partially verified | Safe structured route/method/status/duration/category and correlation implemented; process-local Meter/counters. No historical collector/alerts. |
-| Restart/failure recovery | Partially verified | CI drill implemented; no final pass claimed until executed. |
-| Dependency security | Partially verified | Digest/action SHA pins and lockfile npm install; unsuppressed npm/NuGet/Trivy scan results pending review. Scan execution success is not vulnerability clearance. |
-| Functional regressions | Verified | POS run 41240185882 and Admin run 41240244620 passed full existing suites plus new operational tests. Final-head rerun required. |
-| MFA | Not implemented | Public deployment blocker; requires reviewed enrollment and recovery design. |
-| Account recovery | Partially verified | Gated operator password/session/role/disable commands; no self-service recovery or verified emergency operator ownership. |
-| Public production | Blocked | Local staging evidence does not establish public readiness. |
+| Authentication and authorization | Verified | Native real-user suites retained; staging administrator/cashier boundaries, disabled users, expiry, password/session revocation and logout exercised. POS remains authoritative. |
+| HTTPS and proxy security | Verified | Real local-CA validation on edge and backend hops; secure cookie attributes, external-host redirects, direct untrusted forwarding rejection and spoofed-XFF throttling checked. |
+| Durable Admin sessions | Verified | PostgreSQL protected tickets survive Admin/API/proxy/DB/full-stack restarts and actual restored-database cutover. Per-reference cryptographic purpose rejects copied ticket ciphertext. Absolute expiry is unchanged. |
+| Key protection and recovery | Verified | Native certificate encryption, private mounts, encrypted XML assertions, rotation with old cookies, fail-closed missing configuration and protected-ring restore with explicit permissions. Wrapping certificate remains a separate offline recovery dependency. |
+| Secrets | Verified | Random file-mounted credentials; separate runtime DB roles; fail-closed artifact audits including outage logs. No dumps, cookies, private certificates or keys uploaded. Docker host remains trusted. |
+| Migration safety | Verified | Fresh installation, populated replay, concurrent advisory locking/checksums and failed-file atomic rollback; no reseeding/data loss. |
+| Backup/restore | Verified | Real encrypted custom dump restored into a new isolated DB; all fields compared across 11 business/auth/audit/idempotency tables. Apps then use restored DB/rings and existing unexpired cookies. Off-host disaster recovery remains operator work. |
+| Liveness/readiness | Verified | Separate process/dependency status; real DB outage gives live 200/ready 503; readiness and valid-session access recover. |
+| Logging/correlation | Verified | Safe structured app logs, normalized/forwarded correlation ID observed in both services, filtered proxy failure metadata and error-parameter suppression; upload audit passes. |
+| Operational metrics/monitoring | Partially verified | Administrator-protected process counters/duration and native Meter; safe per-route logs. No persistent collector, alert delivery or on-call ownership. |
+| Restart/failure recovery | Verified | All service and full-stack restarts, forced API kill during checkout, DB outage, bounded same-key retries and exact-once stock/order behavior. Expired-record cleanup also exercised. |
+| Dependencies/supply chain | Partially verified | Maintained action SHAs, digest-pinned bases, npm lockfile and complete npm/NuGet/Trivy reports. npm advisories fixed; remaining image findings documented in dependency-review.md. Green scan execution does not clear vulnerabilities. |
+| Functional/responsive regressions | Verified | 31 POS .NET, 21 Angular, 21 POS browser; 61 Admin .NET, 3 templates, 94 Admin browser; 383 reporting checks on 10,000 historical orders, 99 management, 40 security checks (all prior 39 retained). |
+| MFA/self-service recovery | Not implemented | Public blocker. Gated operator password/role/disable/revoke commands exist; no insecure public recovery endpoint introduced. |
+| Public production | Blocked | No public exposure authorized; remaining security/operations controls below are required. |
 
-Local tests: POS 31/31 (28 existing + 3 operational); Admin 61/61 (58 existing + 3 operational). Existing CI behavior is not reduced: 21 Angular unit/21 POS browser, 3 template/94 Admin browser, 383 reporting assertions on 10,000 historical orders, 99 management and 39 security checks.
+The full staging drill passed **176 assertions** with real Docker/PostgreSQL/HTTPS on an isolated GitHub Actions Ubuntu runner. Docker was unavailable in the editing environment, so no local container execution is claimed. Four additional artifact-auditor tests exercise secret/key/dump rejection and embedded-report decoding. No existing meaningful assertion or authentication boundary was removed.
 
-Initial POS CI identified a malformed-request 400 converted to 500 by the new operational boundary; fixed and unchanged management assertions then passed. Initial staging CI identified unquoted tmpfs mount commas; fixed. A later ephemeral database fixture raced PostgreSQL's temporary initialization server; readiness now probes the authenticated host TCP connection rather than the temporary Unix socket. Failed runs are not counted as passes.
+## Small-fixture timing observations
+
+The recovery artifact records three samples per read/edit operation and one checkout, under the Compose 512 MiB/one-CPU app limits. Median milliseconds: authentication 78.05, catalog 7.86, product edit 17.28, inventory adjustment 18.09, reporting 17.29, historical page 7.00, CSV 6.78; one checkout 31.62. This is a smoke timing observation, not sustained load capacity or a production SLA. The independent reporting regression uses 10,000 historical orders.
+
+## Corrected failures found during verification
+
+The unchanged management suite caught malformed requests becoming 500 instead of 400. Container runs caught malformed tmpfs syntax, Caddy executable capabilities conflicting with cap-drop, missing ingress reachability and an external-host redirect issue. Outage testing exposed stale pooled database connections; these now report safe 503 and bounded same-key replay succeeds. Proxy failure metadata was removed after the credential audit blocked it from upload. Restore testing retained the startup permission check and fixed archive-restored directory modes rather than bypassing it. A clock-dependent test fixture was aligned with the Saudi store date without changing financial/date formulas. Harness-only cookie attribute casing and cookie snapshot issues were fixed; the final complete run passed.
 
 ## Public deployment blockers and limitations
 
@@ -35,3 +48,5 @@ Initial POS CI identified a malformed-request 400 converted to 500 by the new op
 - Payments remain the existing simulated cash/card flow. Real payment processing/financial compliance is outside this milestone.
 - Security/account operator actions print completion but do not create an immutable external security audit trail; business audit history remains database-backed and unchanged.
 - Health endpoints check required objects/connectivity, not every schema permission or semantic invariant. Run the serialized deployment migrator before startup.
+
+- PostgreSQL transport relies on the isolated host/internal bridge; remote database/TLS deployment is not implemented.

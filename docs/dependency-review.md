@@ -19,3 +19,16 @@ Initial executed scans:
 Both apps retain existing password hashing, transaction arithmetic, authorization and reporting. Actions are pinned to verified maintained release commit SHAs: checkout 7.0.1, setup-node 7.1.0, setup-dotnet 6.0.0 and upload-artifact 7.0.2. Workflows grant contents:read only. No OIDC/cloud deployment permission. Runtime image bases are recorded by digest in `deploy/images.json` in POS. No downloaded installer is piped into a shell; the scanner archive checksum is checked before extraction.
 
 The trusted local staging scope uses generated disposable data. Public production remains blocked on unresolved image findings, MFA/recovery, assigned backup/key custody and alerting ownership. Do not reinterpret a green evidence job as permission to publish this stack or import real customer data.
+
+## Verified updated scans
+
+[POS run 41243400011](https://github.com/danishirfan21/MerchantOS-POS/actions/runs/41243400011) and [Admin run 41243440648](https://github.com/danishirfan21/MerchantOS-Admin/actions/runs/41243440648) execute successfully on the verified runtime commits. npm reports zero advisories; NuGet reports no vulnerable declared/transitive packages. Runtime image findings remain:
+
+| Image | Critical | High | Medium | Low | Unknown |
+|---|---:|---:|---:|---:|---:|
+| POS API / Admin (each) | 0 | 0 | 21 | 5 | 0 |
+| Caddy/static frontend | 0 | 7 | 16 | 1 | 3 |
+| Operator tools (unused gosu removed) | 0 | 0 | 0 | 0 | 0 |
+| PostgreSQL base (gosu retained for supported entrypoint) | 1 | 25 | 31 | 3 | 1 |
+
+No finding is hidden by an ignore rule. The public-deployment decision remains BLOCKED. These counts are advisory-database/build observations and must be rechecked for a release.
