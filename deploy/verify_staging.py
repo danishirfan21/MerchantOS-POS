@@ -222,7 +222,7 @@ try:
   path=secret/name;path.write_text(path.read_text().replace('Database=merchantos;','Database=merchant_restore_drill;'))
  run('run','--rm','--no-deps','-e','PGDATABASE=merchant_restore_drill','migrate','/ops/roles.py')
  # Decrypt/restore the protected key directory separately and restart the consumers.
- restored=work/'keys-recovered.tar';subprocess.run(['openssl','cms','-decrypt','-binary','-inform','DER','-in',str(work/'protected-keys.cms'),'-inkey',str(secret/'backup_key.pem'),'-out',str(restored)],check=True)
+ restored=work/'keys-recovered.tar';subprocess.run(['openssl','cms','-decrypt','-binary','-inform','DER','-in',str(work/'protected-keys.cms'),'-inkey',str(work/'recovery-material/backup_key.pem'),'-out',str(restored)],check=True)
  for directory in ['pos-keys','admin-keys']:shutil.rmtree(work/directory)
  with tarfile.open(restored) as archive:archive.extractall(work,filter='data')
  restored.unlink()

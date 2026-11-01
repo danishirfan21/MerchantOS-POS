@@ -1,0 +1,218 @@
+[
+  {
+    "name": "PosUnavailable",
+    "metric": "pos_unavailable",
+    "comparison": "gt",
+    "threshold": 0,
+    "forSeconds": 60,
+    "severity": "critical",
+    "runbook": "docs/operations/monitoring.md#posunavailable"
+  },
+  {
+    "name": "AdminUnavailable",
+    "metric": "admin_unavailable",
+    "comparison": "gt",
+    "threshold": 0,
+    "forSeconds": 60,
+    "severity": "critical",
+    "runbook": "docs/operations/monitoring.md#adminunavailable"
+  },
+  {
+    "name": "DatabaseUnavailable",
+    "metric": "database_unavailable",
+    "comparison": "gt",
+    "threshold": 0,
+    "forSeconds": 30,
+    "severity": "critical",
+    "runbook": "docs/operations/monitoring.md#databaseunavailable"
+  },
+  {
+    "name": "BackupOverdue",
+    "metric": "backup_age_seconds",
+    "comparison": "gt",
+    "threshold": 90000,
+    "forSeconds": 60,
+    "severity": "critical",
+    "runbook": "docs/operations/monitoring.md#backupoverdue"
+  },
+  {
+    "name": "BackupFailed",
+    "metric": "backup_failed",
+    "comparison": "gt",
+    "threshold": 0,
+    "forSeconds": 0,
+    "severity": "critical",
+    "runbook": "docs/operations/monitoring.md#backupfailed"
+  },
+  {
+    "name": "AuditBacklog",
+    "metric": "audit_oldest_seconds",
+    "comparison": "gt",
+    "threshold": 120,
+    "forSeconds": 60,
+    "severity": "critical",
+    "runbook": "docs/operations/monitoring.md#auditbacklog"
+  },
+  {
+    "name": "AuditSignalsUnavailable",
+    "metric": "audit_signal_unavailable",
+    "comparison": "gt",
+    "threshold": 0,
+    "forSeconds": 60,
+    "severity": "critical",
+    "runbook": "docs/operations/monitoring.md#auditsignalsunavailable"
+  },
+  {
+    "name": "PrivilegedSecurityEvent",
+    "metric": "privileged_events",
+    "comparison": "gt",
+    "threshold": 0,
+    "forSeconds": 0,
+    "severity": "warning",
+    "runbook": "docs/operations/monitoring.md#privilegedsecurityevent"
+  },
+  {
+    "name": "RepeatedMfaFailures",
+    "metric": "mfa_failures",
+    "comparison": "gt",
+    "threshold": 4,
+    "forSeconds": 30,
+    "severity": "warning",
+    "runbook": "docs/operations/monitoring.md#repeatedmfafailures"
+  },
+  {
+    "name": "AuthenticationFailures",
+    "metric": "authentication_failures",
+    "comparison": "gt",
+    "threshold": 19,
+    "forSeconds": 60,
+    "severity": "warning",
+    "runbook": "docs/operations/monitoring.md#authenticationfailures"
+  },
+  {
+    "name": "AccountLockouts",
+    "metric": "locked_accounts",
+    "comparison": "gt",
+    "threshold": 0,
+    "forSeconds": 30,
+    "severity": "warning",
+    "runbook": "docs/operations/monitoring.md#accountlockouts"
+  },
+  {
+    "name": "StorageUnavailable",
+    "metric": "storage_unavailable",
+    "comparison": "gt",
+    "threshold": 0,
+    "forSeconds": 60,
+    "severity": "critical",
+    "runbook": "docs/operations/monitoring.md#storageunavailable"
+  },
+  {
+    "name": "StorageCapacity",
+    "metric": "storage_used_percent",
+    "comparison": "gt",
+    "threshold": 80,
+    "forSeconds": 120,
+    "severity": "warning",
+    "runbook": "docs/operations/monitoring.md#storagecapacity"
+  },
+  {
+    "name": "TlsCertificateExpiry",
+    "metric": "tls_certificate_days",
+    "comparison": "lt",
+    "threshold": 7,
+    "forSeconds": 0,
+    "severity": "critical",
+    "runbook": "docs/operations/monitoring.md#tlscertificateexpiry"
+  },
+  {
+    "name": "KeyCertificateExpiry",
+    "metric": "dp_certificate_days",
+    "comparison": "lt",
+    "threshold": 30,
+    "forSeconds": 0,
+    "severity": "warning",
+    "runbook": "docs/operations/monitoring.md#keycertificateexpiry"
+  },
+  {
+    "name": "SecurityExceptionExpiry",
+    "metric": "security_exception_days",
+    "comparison": "lt",
+    "threshold": 7,
+    "forSeconds": 0,
+    "severity": "critical",
+    "runbook": "docs/operations/monitoring.md#securityexceptionexpiry"
+  },
+  {
+    "name": "ReleaseVulnerability",
+    "metric": "release_vulnerability_blocked",
+    "comparison": "gt",
+    "threshold": 0,
+    "forSeconds": 0,
+    "severity": "critical",
+    "runbook": "docs/operations/monitoring.md#releasevulnerability"
+  },
+  {
+    "name": "RestoreVerificationOverdue",
+    "metric": "restore_verification_age_seconds",
+    "comparison": "gt",
+    "threshold": 2678400,
+    "forSeconds": 60,
+    "severity": "warning",
+    "runbook": "docs/operations/monitoring.md#restoreverificationoverdue"
+  },
+  {
+    "name": "ReportingLatency",
+    "metric": "pos_reporting_max_ms",
+    "comparison": "gt",
+    "threshold": 2000,
+    "forSeconds": 120,
+    "severity": "warning",
+    "runbook": "docs/operations/monitoring.md#reportinglatency"
+  },
+  {
+    "name": "PosMetricsUnavailable",
+    "metric": "pos_metrics_unavailable",
+    "comparison": "gt",
+    "threshold": 0,
+    "forSeconds": 60,
+    "severity": "warning",
+    "runbook": "docs/operations/monitoring.md#posmetricsunavailable"
+  },
+  {
+    "name": "AdminMetricsUnavailable",
+    "metric": "admin_metrics_unavailable",
+    "comparison": "gt",
+    "threshold": 0,
+    "forSeconds": 60,
+    "severity": "warning",
+    "runbook": "docs/operations/monitoring.md#adminmetricsunavailable"
+  },
+  {
+    "name": "PosHttpErrors",
+    "metric": "pos_http_5xx_per_minute",
+    "comparison": "gt",
+    "threshold": 5,
+    "forSeconds": 60,
+    "severity": "warning",
+    "runbook": "docs/operations/monitoring.md#poshttperrors"
+  },
+  {
+    "name": "AdminHttpErrors",
+    "metric": "admin_http_5xx_per_minute",
+    "comparison": "gt",
+    "threshold": 5,
+    "forSeconds": 60,
+    "severity": "warning",
+    "runbook": "docs/operations/monitoring.md#adminhttperrors"
+  },
+  {
+    "name": "CheckoutErrors",
+    "metric": "pos_checkout_failures_per_minute",
+    "comparison": "gt",
+    "threshold": 2,
+    "forSeconds": 60,
+    "severity": "warning",
+    "runbook": "docs/operations/monitoring.md#checkouterrors"
+  }
+]

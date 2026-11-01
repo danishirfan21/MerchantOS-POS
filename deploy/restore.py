@@ -8,6 +8,8 @@ with tempfile.TemporaryDirectory() as tmp:
  dump=pathlib.Path(tmp)/'restore.dump';subprocess.run(['openssl','cms','-decrypt','-binary','-inform','DER','-in',str(backup),'-inkey',a.private_key,'-out',str(dump)],check=True)
  subprocess.run(['createdb',a.target],check=True) # Refuses an existing target.
  subprocess.run(['pg_restore','--exit-on-error','--single-transaction','--no-owner','--no-privileges','-d',a.target,str(dump)],check=True)
-subprocess.run(['python3','/ops/migrate.py'],env={**os.environ,'PGDATABASE':a.target},check=True)
+migration=pathlib.Path(__file__).with_name('migrate.py');migration_args=['python3',str(migration)]
+if not pathlib.Path('/migrations').exists():migration_args+=['--directory',str(migration.parents[1]/'db/migrations'),'--schema',str(migration.parents[1]/'db/init/001_schema.sql')]
+subprocess.run(migration_args,env={**os.environ,'PGDATABASE':a.target},check=True)
 subprocess.run(['psql','-X','-q','-v','ON_ERROR_STOP=1','-d',a.target],input="BEGIN; INSERT INTO auth_restore_blocks(user_id) SELECT id FROM auth_users ON CONFLICT DO NOTHING; INSERT INTO security_events(id,category,outcome,correlation_id) VALUES(gen_random_uuid(),'restore_quarantined','blocked',replace(gen_random_uuid()::text,'-','')); COMMIT;",text=True,check=True)
 print('All restored identities are quarantined pending separately authorized reconciliation. Isolated restore completed. Verify invariants and protected key recovery before any application cutover.')

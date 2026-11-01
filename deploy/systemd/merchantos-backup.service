@@ -1,0 +1,15 @@
+[Unit]
+Description=MerchantOS verified encrypted backup and upload
+[Service]
+Type=oneshot
+User=merchantos-backup
+ExecStart=/opt/merchantos/venv/bin/python /opt/merchantos/deploy/operations/backup_job.py run --config /etc/merchantos/backup.json
+TimeoutStartSec=15min
+KillMode=control-group
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/merchantos-backup
+UMask=0077
+MemoryMax=512M
