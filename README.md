@@ -1,3 +1,5 @@
+> **Milestone 8 in progress:** mandatory Administrator MFA and secure account recovery. [Enrollment, recovery, security events and restore reconciliation](docs/mfa-recovery.md). Milestone 7 is merged; final M8 integration/staging verification is pending. No merge or public deployment.
+
 # Authentication milestone
 
 See [authentication architecture and setup](docs/authentication.md). Protected API routes now require genuine sessions and CSRF on unsafe methods. Development identities must be explicitly provisioned from environment credentials; there are no default accounts. Angular uses the same-origin API proxy and HttpOnly session cookies.

@@ -12,7 +12,7 @@ factors=work/'factors';factors.mkdir(mode=0o700)
 def private(path,value):path.write_text(value);path.chmod(0o600)
 def mask(value):
  print('::add-mask::'+value,flush=True)
- with open(os.environ['GITHUB_ENV'],'a') as f:f.write('STAGING_MFA_SECRET_'+uuid.uuid4().hex+'='+value+'\n')
+ with open(os.environ['GITHUB_ENV'],'a') as f:f.write('STAGING_'+uuid.uuid4().hex+('_MFA_CODE' if len(value)==6 else '_MFA_SECRET')+'='+value+'\n')
 secret=work/'secrets';project='merchantos_ops_'+os.environ['GITHUB_RUN_ID']+'_'+os.environ.get('GITHUB_RUN_ATTEMPT','1')
 env={**os.environ,'STAGING_DIR':str(work),'STAGING_UID':str(os.getuid() or 1654),'ADMIN_CONTEXT':str(pathlib.Path(a.admin_context).resolve()),'COMPOSE_PROJECT_NAME':project,'SEED_DEMO':'true'}
 base=['docker','compose','--env-file',str(work/'staging.env'),'-f',str(root/'deploy/compose.yml')]
@@ -68,13 +68,17 @@ class Client:
    if result[0] not in [0,502,503]:return result
    time.sleep(2)
   return result
- def mvc_login(self,temporary=None):
+ def mvc_login(self,temporary=None,restart_pending=False):
   import re,urllib.parse
   with self.http.open('https://localhost:9443/Account/Login') as r:html=r.read().decode()
   token=re.search(r'name="__RequestVerificationToken"[^>]*value="([^"]+)"',html)[1]
   data=urllib.parse.urlencode({'Username':(secret/(self.role+'_username')).read_text(),'Password':temporary or (secret/(self.role+'_password')).read_text(),'ReturnUrl':'/','__RequestVerificationToken':token}).encode()
   with self.http.open(urllib.request.Request('https://localhost:9443/Account/Login',data=data)) as r:check(r.status==200);html=r.read().decode()
   check('Verify' in html);check(b'Sign In' in self.mvc('/Admin/Orders')[1])
+  if restart_pending:
+   expires=sql("SELECT string_agg(expires_at::text,',' ORDER BY id_hash) FROM admin_ticket_sessions")
+   run('restart','admin','pos-api');wait_ready()
+   check(sql("SELECT string_agg(expires_at::text,',' ORDER BY id_hash) FROM admin_ticket_sessions")==expires)
   token=re.search(r'name="__RequestVerificationToken"[^>]*value="([^"]+)"',html)[1]
   form={'__RequestVerificationToken':token}
   key=re.search(r'id="ManualKey"[^>]*>([A-Z2-7]+)</',html)
@@ -135,8 +139,25 @@ try:
  except urllib.error.HTTPError as e:check(e.code==302);check(e.headers['Location'].startswith('https://localhost:9443/Account/Login'))
  for role,target in [('admin','Administrator'),('cashier','Cashier'),('other','Administrator')]:operator('create',role,target)
  seed_mfa('admin')
- admin=Client('admin').login();cashier=Client('cashier').login();mvc=Client('admin').mvc_login();other=Client('other').mvc_login()
+ admin=Client('admin').login();cashier=Client('cashier').login();mvc=Client('admin').mvc_login(restart_pending=True);other=Client('other').mvc_login()
  check(admin.call('/api/orders')[0]==200);check(cashier.call('/api/admin/reports/sales')[0]==403);check(cashier.call('/api/checkout',{})[0]==400)
+ # Real HTTPS negative paths and atomic recovery redemption, separate disposable sessions.
+ pending=Client('admin');pending.csrf();check(pending.call('/api/auth/login',{'username':(secret/'admin_username').read_text(),'password':(secret/'admin_password').read_text()})[0]==202)
+ check(pending.call('/api/admin/reports/sales')[0]==401);check(pending.call('/api/auth/mfa/complete',{'code':'invalid'})[0]==401)
+ sql("UPDATE auth_challenges SET expires_at=now()-interval '1 second' WHERE user_id=(SELECT id FROM auth_users WHERE username='staging-admin')")
+ check(pending.call('/api/auth/mfa/complete',{'recoveryCode':take(factors/'admin.codes')})[0]==401)
+ pending=Client('admin');pending.csrf();check(pending.call('/api/auth/login',{'username':(secret/'admin_username').read_text(),'password':(secret/'admin_password').read_text()})[0]==202)
+ import copy
+ parallel=[]
+ for _ in range(2):
+  c=Client('admin');c.token=pending.token
+  for cookie in pending.jar:c.jar.set_cookie(copy.copy(cookie))
+  parallel.append(c)
+ one=take(factors/'admin.codes')
+ with concurrent.futures.ThreadPoolExecutor() as pool:statuses=list(pool.map(lambda c:c.call('/api/auth/mfa/complete',{'recoveryCode':one})[0],parallel))
+ check(sorted(statuses)==[200,401]);check(pending.call('/api/auth/mfa/complete',{'recoveryCode':one})[0]==401)
+ check(sql("SELECT has_table_privilege('merchant_pos','security_events','INSERT') AND NOT has_table_privilege('merchant_pos','security_events','UPDATE') AND NOT has_table_privilege('merchant_pos','security_events','DELETE')")=='t')
+ check(sql("SELECT NOT has_table_privilege('merchant_admin_session','security_events','INSERT')")=='t')
  cookie=next(c for c in cashier.jar if c.name=='MerchantOS.Pos.Session');check(cookie.secure);check(any(k.lower()=='httponly' for k in cookie._rest));check({k.lower():str(v).lower() for k,v in cookie._rest.items()}.get('samesite')=='strict')
  # Each BFF request forwards only its own server-held identity, including under concurrency.
  with concurrent.futures.ThreadPoolExecutor() as pool:responses=list(pool.map(lambda c:c.mvc('/'),[mvc,other]*5))

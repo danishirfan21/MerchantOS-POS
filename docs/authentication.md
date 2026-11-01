@@ -1,3 +1,5 @@
+> Milestone 8 changes authentication and restore policy. Read [MFA, recovery and identity reconciliation](mfa-recovery.md) first; earlier milestone details below remain historical where superseded.
+
 # Authentication and access boundaries
 
 MerchantOS uses the existing PostgreSQL database as the identity authority. `004_identity.sql` adds users, absolute-expiry sessions and nullable order ownership without resetting products, stock, receipts or checkout tables. Apply all versioned migrations with `ON_ERROR_STOP=1`; old receipts remain Administrator-visible and are not assigned arbitrarily to a cashier.

@@ -1,3 +1,5 @@
+> Milestone 8 changes authentication and restore policy. Read [MFA, recovery and identity reconciliation](mfa-recovery.md) first; earlier milestone details below remain historical where superseded.
+
 # Isolated staging operations (Milestone 7)
 
 ## Scope and assessment

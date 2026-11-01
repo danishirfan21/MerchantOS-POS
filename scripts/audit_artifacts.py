@@ -1,7 +1,7 @@
 """Fail closed before upload; inspect decoded archives, not random encoded ZIP bytes."""
 import base64,io,os,re,sys,zipfile
 from pathlib import Path
-secrets=[v.encode() for k,v in os.environ.items() if k.startswith(('TEST_','STAGING_')) and k.endswith(('_PASSWORD','_MFA_SECRET')) and len(v)>=14]
+secrets=[v.encode() for k,v in os.environ.items() if k.startswith(('TEST_','STAGING_')) and ((k.endswith(('_PASSWORD','_MFA_SECRET')) and len(v)>=14) or (k.endswith(('_MFA_CODE','_OTP')) and len(v)==6))]
 findings=[];count=0
 embedded=re.compile(rb'data:application/zip;base64,([A-Za-z0-9+/=]+)')
 def inspect(data,label):

@@ -1,4 +1,8 @@
-# Milestone 7 — isolated staging verified; PR unmerged
+# Milestone 8 — implementation and verification in progress
+
+See [MFA and recovery](docs/mfa-recovery.md). Mandatory backend MFA, restricted durable Admin challenges, enrollment/recovery/password UI, restore quarantine and vulnerability gates are implemented. Final-head browser and HTTPS staging checks are running; this milestone is not yet declared complete. Existing business behavior remains under regression verification.
+
+# Milestone 7 — merged; historical isolated staging evidence
 
 POS [PR #6](https://github.com/danishirfan21/MerchantOS-POS/pull/6), branch `feature/operational-hardening`. See [verified commits, CI and readiness matrix](docs/staging-readiness.md) and [setup/recovery runbook](docs/staging-operations.md). Staging GO is restricted to isolated single-instance demo data; public deployment remains blocked.
 

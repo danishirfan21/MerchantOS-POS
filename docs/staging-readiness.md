@@ -1,3 +1,5 @@
+> M8 readiness is pending final-head verification. The M7 evidence below is a historical baseline, not approval of the changed MFA/restore implementation. Public deployment remains blocked. See [MFA recovery controls](mfa-recovery.md).
+
 # Milestone 7 readiness evidence
 
 **GO for isolated, single-instance localhost staging using disposable demo data. Public production: BLOCKED.** No public deployment or merge was performed.
