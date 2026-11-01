@@ -19,6 +19,7 @@ run('req','-x509','-newkey','rsa:3072','-nodes','-keyout',s/'backup_key.pem','-o
 # DB connections are mounted as files, never Compose environment values or Docker build args.
 for name,user,password in [('pos_connection','merchant_pos','pos_db_password'),('admin_connection','merchant_admin_session','admin_db_password')]:
  (s/name).write_text('Host=db;Database=merchantos;Username='+user+';Password='+values[password]+';Timeout=3;Command Timeout=10')
+(s/'owner_connection').write_text('Host=db;Database=merchantos;Username=merchantos;Password='+values['db_password']+';Timeout=3;Command Timeout=10')
 (s/'pgpass').write_text('db:5432:*:merchantos:'+values['db_password']+'\n')
 (out/'staging.env').write_text(f'STAGING_DIR={out}\nSTAGING_UID={uid}\nADMIN_CONTEXT=../../MerchantOS-Admin\nCOMPOSE_PROJECT_NAME=merchantos_staging\n')
 for f in s.iterdir():f.chmod(0o600)

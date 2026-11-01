@@ -13,14 +13,16 @@ using Npgsql;
 namespace MerchantOS.Api.Security;
 
 public sealed record LoginRequest(string Username, string Password);
-public sealed record AuthUser(Guid Id, string Username, string Role);
+public sealed record AuthUser(Guid Id, string Username, string Role, bool MfaVerified=false, DateTimeOffset? MfaVerifiedAt=null);
 public static class AuthSecurity
 {
     public const string Scheme = "MerchantPOS";
     public const string Cookie = "MerchantOS.Pos.Session";
-    public static ClaimsPrincipal Principal(AuthUser user) => new(new ClaimsIdentity([
-        new(ClaimTypes.NameIdentifier, user.Id.ToString()), new(ClaimTypes.Name, user.Username), new(ClaimTypes.Role, user.Role)
-    ], Scheme));
+    public static ClaimsPrincipal Principal(AuthUser user) {
+        var identity=new ClaimsIdentity([new(ClaimTypes.NameIdentifier,user.Id.ToString()),new(ClaimTypes.Name,user.Username),new(ClaimTypes.Role,user.Role)],Scheme);
+        if(user.MfaVerified&&user.MfaVerifiedAt is {} at){identity.AddClaim(new("amr","mfa"));identity.AddClaim(new("mfa_verified_at",at.ToString("O")));}
+        return new(identity);
+    }
     public static bool LoopbackHttp(IConfiguration config, IWebHostEnvironment env) =>
         env.IsDevelopment() && config.GetValue<bool>("Security:AllowLoopbackHttp");
     public static void AddSecurity(this WebApplicationBuilder builder)
@@ -31,6 +33,7 @@ public static class AuthSecurity
         builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(builder.Configuration.GetConnectionString("MerchantDb")!));
         builder.Services.AddSingleton<IPasswordHasher<AuthUser>, PasswordHasher<AuthUser>>();
         builder.Services.AddSingleton<DbSessionStore>();
+        builder.Services.AddSingleton<IdentitySecurity>();
         builder.Services.AddAuthentication(Scheme).AddCookie(Scheme, options => {
             options.Cookie.Name = Cookie; options.Cookie.HttpOnly = true; options.Cookie.SameSite = SameSiteMode.Strict;
             options.Cookie.SecurePolicy = localHttp ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
@@ -55,6 +58,7 @@ public static class AuthSecurity
         });
         builder.Services.AddRateLimiter(options => {
             options.RejectionStatusCode = 429;
+            foreach(var name in new[]{"factor","account"})options.AddPolicy(name,context=>RateLimitPartition.GetFixedWindowLimiter(name=="account"?context.User.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown":context.Connection.RemoteIpAddress?.ToString()??"unknown",_=>new FixedWindowRateLimiterOptions{PermitLimit=name=="account"?6:60,Window=TimeSpan.FromMinutes(1),QueueLimit=0}));
             options.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
                 context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions {
                     PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0
@@ -88,41 +92,45 @@ public static class AuthSecurity
     {
         app.MapGet("/api/auth/csrf", (HttpContext context, IAntiforgery antiforgery) =>
             Results.Ok(new { token = antiforgery.GetAndStoreTokens(context).RequestToken })).AllowAnonymous();
-        app.MapPost("/api/auth/login", async (LoginRequest input, HttpContext context, NpgsqlDataSource db, IPasswordHasher<AuthUser> hasher) => {
+        app.MapPost("/api/auth/login", async (LoginRequest input, HttpContext context, NpgsqlDataSource db, IPasswordHasher<AuthUser> hasher, IdentitySecurity identity) => {
             if (context.Request.Cookies.ContainsKey(Cookie)) { await context.SignOutAsync(Scheme); return Results.Conflict(new { message = "Session cleared. Please sign in again." }); }
             if (input.Username is null || input.Password is null || input.Username.Length > 80 || input.Password.Length > 128)
                 return Results.Unauthorized();
             await using var connection = await db.OpenConnectionAsync(context.RequestAborted);
             await using var tx = await connection.BeginTransactionAsync(context.RequestAborted);
-            await using var cmd = new NpgsqlCommand("SELECT id,username,role,password_hash,enabled,failures,locked_until FROM auth_users WHERE username=@name FOR UPDATE", connection, tx);
+            await using var cmd = new NpgsqlCommand("SELECT id,username,role,password_hash,enabled,failures,GREATEST(locked_until,mfa_locked_until),mfa_enabled,must_change_password,security_version,EXISTS(SELECT 1 FROM auth_restore_blocks WHERE user_id=auth_users.id) FROM auth_users WHERE username=@name FOR UPDATE", connection, tx);
             cmd.Parameters.AddWithValue("name", input.Username.Trim().ToLowerInvariant());
             await using var reader = await cmd.ExecuteReaderAsync(context.RequestAborted);
-            AuthUser? user = null; string hash = DummyHash; bool enabled = false, locked = false; int failures = 0;
+            AuthUser? user = null; string hash = DummyHash; bool enabled = false, locked = false; int failures = 0; bool enrolled=false,change=false,blocked=false;long version=1;
             if (await reader.ReadAsync(context.RequestAborted)) {
                 user = new(reader.GetGuid(0), reader.GetString(1), reader.GetString(2)); hash = reader.GetString(3);
                 enabled = reader.GetBoolean(4); failures = reader.GetInt32(5);
-                locked = !reader.IsDBNull(6) && reader.GetDateTime(6) > DateTime.UtcNow;
+                locked = !reader.IsDBNull(6) && reader.GetDateTime(6) > DateTime.UtcNow; enrolled=reader.GetBoolean(7);change=reader.GetBoolean(8);version=reader.GetInt64(9);blocked=reader.GetBoolean(10);
             }
             await reader.CloseAsync();
             var result = hasher.VerifyHashedPassword(user ?? DummyUser, hash, input.Password);
-            if (user is null || !enabled || locked || result == PasswordVerificationResult.Failed) {
+            if (user is null || !enabled || locked || blocked || result == PasswordVerificationResult.Failed) {
                 if (user is not null && !locked) {
                     await using var failed = new NpgsqlCommand("UPDATE auth_users SET failures=@fail,locked_until=CASE WHEN @fail>=5 THEN now()+interval '5 minutes' ELSE NULL END WHERE id=@id", connection, tx);
                     failed.Parameters.AddWithValue("fail", failures + 1); failed.Parameters.AddWithValue("id", user.Id); await failed.ExecuteNonQueryAsync();
                 }
-                await tx.CommitAsync(); return Results.Unauthorized();
+                await IdentitySecurity.Event(connection,tx,"primary_authentication",null,user?.Id,"failed",context.TraceIdentifier);await tx.CommitAsync(); return Results.Unauthorized();
             }
             await using var success = new NpgsqlCommand("UPDATE auth_users SET failures=0,locked_until=NULL,last_login_at=now(),password_hash=@hash WHERE id=@id", connection, tx);
             success.Parameters.AddWithValue("hash", result == PasswordVerificationResult.SuccessRehashNeeded ? hasher.HashPassword(user, input.Password) : hash);
-            success.Parameters.AddWithValue("id", user.Id); await success.ExecuteNonQueryAsync(); await tx.CommitAsync();
-            await context.SignOutAsync(Scheme); // Revoke the prior session before issuing a fresh ticket.
-            await context.SignInAsync(Scheme, Principal(user), new AuthenticationProperties { IsPersistent = false, ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(30), AllowRefresh = false });
-            return Results.Ok(user);
+            success.Parameters.AddWithValue("id", user.Id); await success.ExecuteNonQueryAsync();
+            if(user.Role=="Administrator"||change){
+                var pending=await identity.Begin(connection,tx,user,version,enrolled,change,context.TraceIdentifier);await tx.CommitAsync();
+                context.Response.Cookies.Append(IdentitySecurity.ChallengeCookie,pending.Reference,new CookieOptions{HttpOnly=true,Secure=!LoopbackHttp(context.RequestServices.GetRequiredService<IConfiguration>(),context.RequestServices.GetRequiredService<IWebHostEnvironment>()),SameSite=SameSiteMode.Strict,Path="/",Expires=pending.Challenge.ExpiresAt,IsEssential=true});
+                return Results.Json(pending.Challenge,statusCode:202);
+            }
+            var grant=await IdentitySecurity.Grant(connection,tx,user,version,false,"password",context.TraceIdentifier);await tx.CommitAsync();await IdentitySecurity.SignIn(context,grant);return Results.Ok(user);
         }).AllowAnonymous().RequireRateLimiting("login");
         app.MapGet("/api/auth/me", (HttpContext context) => Results.Ok(new AuthUser(
-            Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!), context.User.Identity!.Name!, context.User.FindFirstValue(ClaimTypes.Role)!)))
+            Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!), context.User.Identity!.Name!, context.User.FindFirstValue(ClaimTypes.Role)!,context.User.HasClaim("amr","mfa"),DateTimeOffset.TryParse(context.User.FindFirstValue("mfa_verified_at"),out var at)?at:null)))
             .RequireAuthorization("Session");
-        app.MapPost("/api/auth/logout", async (HttpContext context) => { await context.SignOutAsync(Scheme); return Results.NoContent(); }).RequireAuthorization("Session");
+        app.MapPost("/api/auth/logout", async (HttpContext context,NpgsqlDataSource source) => {await using var c=await source.OpenConnectionAsync();await using var tx=await c.BeginTransactionAsync();var id=Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!);await IdentitySecurity.Event(c,tx,"session_logout",id,id,"success",context.TraceIdentifier);await tx.CommitAsync();await context.SignOutAsync(Scheme);return Results.NoContent();}).RequireAuthorization("Session");
+        IdentitySecurity.Map(app);
     }
     private static readonly AuthUser DummyUser = new(Guid.Empty, "dummy", "Cashier");
     private static readonly string DummyHash = new PasswordHasher<AuthUser>().HashPassword(DummyUser, Convert.ToHexString(RandomNumberGenerator.GetBytes(32)));
@@ -146,17 +154,18 @@ public static class AuthSecurity
 public sealed class DbSessionStore(NpgsqlDataSource db) : ITicketStore
 {
     public async Task<string> StoreAsync(AuthenticationTicket ticket) {
-        var key = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-        await using var cmd = db.CreateCommand("INSERT INTO auth_sessions(id,user_id,expires_at) VALUES(@id,@user,@expiry)");
-        cmd.Parameters.AddWithValue("id", key); cmd.Parameters.AddWithValue("user", Guid.Parse(ticket.Principal.FindFirstValue(ClaimTypes.NameIdentifier)!));
-        cmd.Parameters.AddWithValue("expiry", ticket.Properties.ExpiresUtc!.Value); await cmd.ExecuteNonQueryAsync(); return key;
+        if(!ticket.Properties.Items.TryGetValue("issued_session",out var key)||key is not {Length:64})throw new InvalidOperationException("Session issuance requires a committed authoritative grant.");
+        await using var cmd=db.CreateCommand("SELECT EXISTS(SELECT 1 FROM auth_sessions s JOIN auth_users u ON u.id=s.user_id WHERE s.id=@id AND u.id=@user AND u.enabled AND NOT u.must_change_password AND s.security_version=u.security_version AND s.expires_at>clock_timestamp() AND (u.role<>'Administrator' OR (u.mfa_enabled AND s.mfa_verified_at IS NOT NULL)) AND NOT EXISTS(SELECT 1 FROM auth_restore_blocks b WHERE b.user_id=u.id))");
+        cmd.Parameters.AddWithValue("id",key);cmd.Parameters.AddWithValue("user",Guid.Parse(ticket.Principal.FindFirstValue(ClaimTypes.NameIdentifier)!));if((bool)(await cmd.ExecuteScalarAsync())!!=true)throw new InvalidOperationException("Identity changed before cookie issuance.");return key;
     }
     public Task RenewAsync(string key, AuthenticationTicket ticket) => Task.CompletedTask; // Absolute expiry; never extend a session.
     public async Task<AuthenticationTicket?> RetrieveAsync(string key) {
-        await using var cmd = db.CreateCommand("SELECT u.id,u.username,u.role,s.expires_at FROM auth_sessions s JOIN auth_users u ON u.id=s.user_id WHERE s.id=@id AND s.expires_at>now() AND u.enabled");
+        await using var cmd = db.CreateCommand("SELECT u.id,u.username,u.role,s.expires_at,s.mfa_verified_at,s.security_version FROM auth_sessions s JOIN auth_users u ON u.id=s.user_id WHERE s.id=@id AND s.expires_at>clock_timestamp() AND u.enabled AND NOT u.must_change_password AND s.security_version=u.security_version AND (u.role<>'Administrator' OR (u.mfa_enabled AND s.mfa_verified_at IS NOT NULL)) AND NOT EXISTS(SELECT 1 FROM auth_restore_blocks b WHERE b.user_id=u.id)");
         cmd.Parameters.AddWithValue("id", key); await using var reader = await cmd.ExecuteReaderAsync();
         if (!await reader.ReadAsync()) return null;
-        return new AuthenticationTicket(AuthSecurity.Principal(new(reader.GetGuid(0), reader.GetString(1), reader.GetString(2))),
+        var principal=AuthSecurity.Principal(new(reader.GetGuid(0),reader.GetString(1),reader.GetString(2),!reader.IsDBNull(4),reader.IsDBNull(4)?null:new DateTimeOffset(reader.GetDateTime(4))));
+        ((ClaimsIdentity)principal.Identity!).AddClaim(new("security_version",reader.GetInt64(5).ToString()));
+        return new AuthenticationTicket(principal,
             new AuthenticationProperties { ExpiresUtc = new DateTimeOffset(reader.GetDateTime(3)), AllowRefresh = false }, AuthSecurity.Scheme);
     }
     public async Task RemoveAsync(string key) { await using var cmd = db.CreateCommand("DELETE FROM auth_sessions WHERE id=@id"); cmd.Parameters.AddWithValue("id", key); await cmd.ExecuteNonQueryAsync(); }
