@@ -6,8 +6,14 @@ COPY angular.json tsconfig*.json ./
 COPY src/ ./src/
 COPY public/ ./public/
 RUN npm run build
+# Rebuild the maintained upstream Caddy release, patching Go/module advisories.
+FROM golang:1.27.3-alpine@sha256:d200d2dd76b03a99b52651fd1325aff7dcd35422c35c01bac56571b0507f3deb AS caddy-build
+ENV CGO_ENABLED=0 GOTOOLCHAIN=local GOMAXPROCS=2 GOFLAGS=-p=2
+WORKDIR /build
+RUN go mod init merchantos-caddy-build && go get github.com/caddyserver/caddy/v2/cmd/caddy@v2.11.7 github.com/go-jose/go-jose/v4@v4.1.6 golang.org/x/net@v0.60.0 && go build -trimpath -ldflags='-s -w' -o /out/caddy github.com/caddyserver/caddy/v2/cmd/caddy
 FROM caddy:2-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5
 RUN apk upgrade --no-cache && apk add --no-cache curl && setcap -r /usr/bin/caddy
+COPY --from=caddy-build /out/caddy /usr/bin/caddy
 COPY --from=build /src/dist/merchantos-pos/browser/ /srv/
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
 USER 1654

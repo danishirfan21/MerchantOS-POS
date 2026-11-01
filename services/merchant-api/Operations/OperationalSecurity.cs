@@ -11,7 +11,7 @@ namespace MerchantOS.Operations;
 public static class OperationalSecurity {
  public static bool Enabled(IConfiguration c)=>c.GetValue<bool>("Operations:Enabled");
  public static void Configure(WebApplicationBuilder b,string component) {
-  foreach(var key in new[]{"ConnectionStrings:MerchantDb","ConnectionStrings:AdminSessions","Operations:CertificatePassword","Kestrel:Certificates:Default:Password","Account:Username","Account:Password","Bootstrap:Username","Bootstrap:Password"}){
+  foreach(var key in new[]{"ConnectionStrings:MerchantDb","ConnectionStrings:AdminSessions","Operations:CertificatePassword","Kestrel:Certificates:Default:Password","Account:Username","Account:Password","Account:MfaSecret","Account:Code","Bootstrap:Username","Bootstrap:Password"}){
    if(b.Configuration[key+"File"] is {} file)b.Configuration[key]=File.ReadAllText(file).TrimEnd('\r','\n');
   }
   if((b.Environment.IsStaging()||b.Environment.IsProduction())&&!Enabled(b.Configuration))throw new InvalidOperationException("Operations:Enabled is required outside Development/Testing.");

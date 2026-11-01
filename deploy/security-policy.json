@@ -1,0 +1,16 @@
+{
+  "scope": "isolated disposable single-instance staging only; public production remains blocked",
+  "caddyConfigSha256": "5d9157e555e7dcdab3e1c04bfe503fcfd4403cc697c2f7ca93e6905664a70c29",
+  "exceptions": [
+    {
+      "role": "web",
+      "vulnerabilityId": "CVE-2026-116587",
+      "package": "github.com/go-jose/go-jose/v3",
+      "installedVersion": "v3.0.5",
+      "expiresUtc": "2026-12-01",
+      "owner": "repository maintainer (danishirfan21)",
+      "requiresNoFixedVersion": true,
+      "rationale": "Unfixed legacy module in supported upstream Caddy dependency graph. No JWT/JWK validation endpoint or automated certificate issuer is configured; pinned configuration uses only local certificate files and fixed HTTPS backends. Staging-only temporary exception; do not approve public exposure."
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+> **Milestone 8 review candidate:** mandatory Administrator MFA and secure account recovery. [Enrollment, recovery, security events and restore reconciliation](docs/mfa-recovery.md). Milestone 7 is merged. Executed M8 integration and HTTPS recovery evidence is recorded in [readiness](docs/staging-readiness.md); final-head checks govern review readiness. No merge or public deployment.
+
 # Authentication milestone
 
 See [authentication architecture and setup](docs/authentication.md). Protected API routes now require genuine sessions and CSRF on unsafe methods. Development identities must be explicitly provisioned from environment credentials; there are no default accounts. Angular uses the same-origin API proxy and HttpOnly session cookies.
@@ -74,9 +76,9 @@ Checkout accepts product IDs/quantities, an allowed discount (0, 5 or 10), cash 
 
 ## Historical reporting (Milestone 6)
 
-Administrator-only historical Orders, exact sales metrics, store-local trends, payment breakdown, top products and bounded UTF-8 CSV exports. See [reporting contracts and financial/date definitions](docs/reporting.md). Reports query PostgreSQL directly; Cashier receipt ownership and Angular behavior remain unchanged. Apply additive index migration006 after existing migrations. [POS PR #5](https://github.com/danishirfan21/MerchantOS-POS/pull/5) and dependent Admin PR #7 stay unmerged for review.
+Administrator-only historical Orders, exact sales metrics, store-local trends, payment breakdown, top products and bounded UTF-8 CSV exports. See [reporting contracts and financial/date definitions](docs/reporting.md). Reports query PostgreSQL directly; Cashier receipt ownership and Angular behavior remain unchanged. Apply additive index migration006 after existing migrations. [POS PR #5](https://github.com/danishirfan21/MerchantOS-POS/pull/5) and dependent Admin PR #7 are merged.
 
 
 ## Milestone 7 — operational staging
 
-Implementation in new unmerged feature PRs. See [staging operations and incident runbook](docs/staging-operations.md) and [evidence/readiness matrix](docs/staging-readiness.md). Persistent protected keys, durable Admin tickets, strict local HTTPS Compose, safe migrations, encrypted backup/restore, health/readiness and correlation-safe logging are implemented. The real HTTPS Compose recovery drill passed 176 assertions; complete existing regression suites and credential audits pass. Remaining image findings and production blockers are recorded in the matrix. No public deployment or automatic merge.
+Milestone 7 is merged in both repositories. See [staging operations and incident runbook](docs/staging-operations.md) and [evidence/readiness matrix](docs/staging-readiness.md). Persistent protected keys, durable Admin tickets, strict local HTTPS Compose, safe migrations, encrypted backup/restore, health/readiness and correlation-safe logging are implemented. The real HTTPS Compose recovery drill passed 176 assertions; complete existing regression suites and credential audits pass. Remaining image findings and production blockers are recorded in the matrix. No public deployment or automatic merge.

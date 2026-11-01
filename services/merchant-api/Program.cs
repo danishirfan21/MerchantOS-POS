@@ -25,7 +25,7 @@ app.UseSecurity();
 app.MapSecurity();
 app.MapGet("/api/health/live",()=>Results.Ok(new{status="alive"})).AllowAnonymous();
 app.MapGet("/api/health/ready",async(Npgsql.NpgsqlDataSource source,CancellationToken ct)=>{
- try{await using var cmd=source.CreateCommand("SELECT to_regclass('admin_ticket_sessions') IS NOT NULL AND to_regclass('admin_audit') IS NOT NULL AND to_regclass('auth_sessions') IS NOT NULL AND to_regclass('ix_orders_chronological') IS NOT NULL");cmd.CommandTimeout=2;return (bool)(await cmd.ExecuteScalarAsync(ct))!?Results.Ok(new{status="ready"}):Results.StatusCode(503);}catch{return Results.StatusCode(503);}
+ try{await using var cmd=source.CreateCommand("SELECT to_regclass('admin_ticket_sessions') IS NOT NULL AND to_regclass('admin_audit') IS NOT NULL AND to_regclass('auth_sessions') IS NOT NULL AND to_regclass('ix_orders_chronological') IS NOT NULL AND to_regclass('auth_restore_blocks') IS NOT NULL AND to_regclass('security_events') IS NOT NULL");cmd.CommandTimeout=2;return (bool)(await cmd.ExecuteScalarAsync(ct))!?Results.Ok(new{status="ready"}):Results.StatusCode(503);}catch{return Results.StatusCode(503);}
 }).AllowAnonymous();
 app.MapGet("/api/ops/metrics",(OperationalMetrics metrics)=>Results.Ok(metrics.Snapshot())).RequireAuthorization("Reporting");
 

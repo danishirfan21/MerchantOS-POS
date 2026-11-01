@@ -4,7 +4,11 @@ BASE='http://127.0.0.1:5080'
 class Client:
  def __init__(self,role):
   self.jar=http.cookiejar.CookieJar();self.opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.jar));self.token=''
-  self.csrf();status,_=self.request('/api/auth/login',{'username':os.environ['TEST_'+role+'_USERNAME'],'password':os.environ['TEST_'+role+'_PASSWORD']});assert status==200,'Test sign-in failed';self.csrf()
+  self.csrf();status,_=self.request('/api/auth/login',{'username':os.environ['TEST_'+role+'_USERNAME'],'password':os.environ['TEST_'+role+'_PASSWORD']});
+  if status==202:
+   from mfa_fixture import take
+   status,_=self.request('/api/auth/mfa/complete',{'recoveryCode':take(os.environ['TEST_'+role+'_RECOVERY_FILE'])})
+  assert status==200,'Test sign-in failed';self.csrf()
  def csrf(self):
   with self.opener.open(BASE+'/api/auth/csrf',timeout=15) as r:self.token=json.load(r)['token']
  def request(self,path,payload=None,csrf=True):

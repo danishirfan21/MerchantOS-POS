@@ -40,6 +40,8 @@ jobs:
           dotnet test services/merchant-api.Tests/MerchantOS.Api.Tests.csproj -c Release
       - name: Provision isolated identities
         run: python3 scripts/ci_accounts.py
+      - name: Real identity lifecycle and concurrent one-time redemption
+        run: python3 scripts/verify_identity.py
       - name: Start API and verify live endpoints
         run: |
           dotnet run --project services/merchant-api/MerchantOS.Api.csproj --no-build --configuration Release > api.log 2>&1 &
@@ -71,7 +73,7 @@ jobs:
         if: always()
         run: |
           python3 scripts/test_audit_artifacts.py
-          python3 scripts/audit_artifacts.py playwright-report test-results api.log report-query-plan.json
+          python3 scripts/audit_artifacts.py playwright-report test-results api.log identity-api.log identity-results.json report-query-plan.json
       - name: Upload browser artifacts
         if: always() && steps.artifact-audit.outcome == 'success' 
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -81,5 +83,7 @@ jobs:
             playwright-report/
             test-results/
             api.log
+            identity-api.log
+            identity-results.json
             report-query-plan.json
           if-no-files-found: ignore

@@ -23,7 +23,8 @@ x-security: &security
   AllowedHosts: localhost;127.0.0.1;pos-api;admin
 services:
   db:
-    image: postgres:17-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b
+    build: {context: .., dockerfile: deploy/Dockerfile.db}
+    image: ${COMPOSE_PROJECT_NAME:-merchantos_staging}-db
     command: ['postgres','-c','log_parameter_max_length_on_error=0','-c','log_min_error_statement=panic']
     environment:
       POSTGRES_DB: merchantos
