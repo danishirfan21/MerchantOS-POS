@@ -301,6 +301,7 @@ try:
  from storage import Store
  from witness import backup_checkpoint,verify as verify_witness
  from common import atomic_json,digest,iso
+ from recovery_bundle import create as create_recovery_bundle,extract as extract_recovery_bundle
  controller=pathlib.Path(tempfile.mkdtemp(prefix='merchantos-independent-controller-'));controller.chmod(0o700)
  remote=Fixture(controller/'s3-endpoint');remote_config=remote.configuration('disaster-recovery');remote.initialize(remote_config);remote_store=Store(remote_config)
  try:
@@ -308,12 +309,7 @@ try:
   run('run','--rm','--no-deps','-e','PGDATABASE=merchant_restore_drill','backup');latest=sorted((work/'backups').glob('*.dump.cms'))[-1];dr_timings['backupSeconds']=round(time.monotonic()-started,3)
   # Wrap protected key XML AND its wrapping dependencies in a streaming CMS envelope.
   bundle=controller/'protected-dependencies.cms'
-  encrypt=subprocess.Popen(['openssl','cms','-encrypt','-binary','-aes-256-cbc','-outform','DER','-out',str(bundle),str(secret/'backup_cert.pem')],stdin=subprocess.PIPE,stderr=subprocess.DEVNULL)
-  with tarfile.open(fileobj=encrypt.stdin,mode='w|') as archive:
-   for directory in ['pos-keys','admin-keys']:
-    for file in (work/directory).glob('*.xml'):archive.add(file,arcname=directory+'/'+file.name)
-   archive.add(secret/'dp.pfx',arcname='recovered-material/dp.pfx');archive.add(secret/'dp_password',arcname='recovered-material/dp_password')
-  encrypt.stdin.close();check(encrypt.wait(timeout=30)==0)
+  bundle_configuration=controller/'bundle.json';atomic_json(bundle_configuration,{'posKeys':str(work/'pos-keys'),'adminKeys':str(work/'admin-keys'),'wrappingPfx':str(secret/'dp.pfx'),'wrappingPasswordFile':str(secret/'dp_password'),'wrappingPublicCertificate':str(secret/'dp.crt'),'encryptionCertificate':str(secret/'backup_cert.pem')});check(create_recovery_bundle(bundle_configuration,bundle)['privateRecoveryKeyIncluded']==False)
   uploaded=time.monotonic();objects={}
   for file in [latest,latest.with_suffix('.json'),bundle]:objects[file.name]=remote_store.put_file('recovery/'+latest.name+'/'+file.name,file)
   dr_timings['uploadSeconds']=round(time.monotonic()-uploaded,3);receipt=controller/'approved-recovery-receipt.json';atomic_json(receipt,{'objects':objects,'approvedBy':'isolated CI witness; no human approval claimed','verifiedUtc':iso()})
@@ -321,7 +317,7 @@ try:
   old_browser_cookies=[copy.copy(cookie) for cookie in mvc.jar];old_backend_cookies=[copy.copy(cookie) for cookie in admin.jar]
   # Move, do not duplicate, the private recovery key into the fixture custodian interface.
   custodian_key=controller/'custodian-backup.key';(work/'recovery-material/backup_key.pem').rename(custodian_key)
-  lost_work=work;fresh=work.parent/(work.name+'-fresh-host');loss_started=time.monotonic();run('down','--volumes','--remove-orphans');shutil.rmtree(lost_work)
+  lost_work=work;fresh=work.parent/(work.name+'-fresh-host');loss_started=time.monotonic();(evidence/'original-host-staging.log').write_text(run('logs','--no-color','--tail','2000').stdout);run('down','--volumes','--remove-orphans');shutil.rmtree(lost_work)
   subprocess.run(['python3',str(root/'deploy/init-local.py'),'--output',str(fresh)],check=True)
   work=fresh;secret=work/'secrets';factors=work/'factors';factors.mkdir(mode=0o700);project=project+'_recovered'
   env={**env,'STAGING_DIR':str(work),'COMPOSE_PROJECT_NAME':project,'BACKUP_PRIVATE_KEY_FILE':str(custodian_key)};base=['docker','compose','--env-file',str(work/'staging.env'),'-f',str(root/'deploy/compose.yml')]
@@ -330,16 +326,9 @@ try:
    remote_store.download(obj['key'],obj['versionId'],work/'backups'/name,obj['sha256']);check((work/'backups'/name).is_file())
   dr_timings['downloadSeconds']=round(time.monotonic()-retrieved,3)
   # Missing private material is a hard failure, before any database creation.
-  decrypt=subprocess.Popen(['openssl','cms','-decrypt','-binary','-inform','DER','-in',str(work/'backups'/bundle.name),'-inkey',str(custodian_key)],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
-  for directory in ['pos-keys','admin-keys']:shutil.rmtree(work/directory);(work/directory).mkdir(mode=0o700)
-  with tarfile.open(fileobj=decrypt.stdout,mode='r|') as archive:
-   for member in archive:
-    check(member.isfile() and (re.fullmatch(r'(pos-keys|admin-keys)/key-[0-9a-f-]+\.xml',member.name) is not None or member.name in ['recovered-material/dp.pfx','recovered-material/dp_password']))
-    archive.extract(member,work,filter='data');(work/member.name).chmod(0o600)
-  check(decrypt.wait(timeout=30)==0)
-  for name in ['dp.pfx','dp_password']:(work/'recovered-material'/name).replace(secret/name)
-  (work/'recovered-material').rmdir()
-  for directory in ['pos-keys','admin-keys']:(work/directory).chmod(0o700)
+  recovered_dependencies=controller/'recovered-dependencies';check(extract_recovery_bundle(work/'backups'/bundle.name,custodian_key,recovered_dependencies,receipt,witness_cert)['privateRecoveryKeyCopied']==False)
+  for directory in ['pos-keys','admin-keys']:shutil.rmtree(work/directory);(recovered_dependencies/directory).replace(work/directory)
+  for name in ['dp.pfx','dp_password','dp.crt']:(recovered_dependencies/'recovered-material'/name).replace(secret/name)
   run('build');run('up','-d','db')
   for attempt in range(60):
    if run('exec','-T','db','pg_isready','-h','127.0.0.1','-U','merchantos','-d','merchantos',ok=False).returncode==0:break
@@ -384,5 +373,5 @@ try:
  print(f'Staging operational drill passed: {checks} assertions; real TLS, durable sessions, restarts, outage, exact-once retries, migration concurrency and encrypted restore.')
 finally:
  # Only safe, bounded evidence. No dumps, secret mounts, key files, cookies or HTTP bodies are uploaded.
- logs=run('logs','--no-color',ok=False).stdout;(evidence/'staging.log').write_text(logs)
+ logs=run('logs','--no-color','--tail','2000',ok=False).stdout;(evidence/'staging.log').write_text(logs)
  run('down','--volumes','--remove-orphans',ok=False)

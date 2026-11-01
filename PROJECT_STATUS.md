@@ -1,3 +1,7 @@
+# Milestone 9 — implementation and verification in progress
+
+Adds encrypted S3 backup adapters, independently signed recovery receipts/checkpoints, transactional audit outbox/export, dedicated operator privileges, scoped metrics/alert delivery and a fresh-environment recovery drill. No application redesign or financial changes. Actual tested revisions/results will be linked in the M9 PRs. Real external provider durability/retention, custody, live alert routing and staffing are not established. See [operational readiness](docs/operations/readiness.md).
+
 # Milestone 8 — review candidate; unmerged
 
 See [MFA and recovery](docs/mfa-recovery.md). Mandatory backend MFA, restricted durable Admin challenges, enrollment/recovery/password UI, restore quarantine and vulnerability gates are implemented. Executed verification includes 72 PostgreSQL identity assertions, 109 Admin browser cases and 283 HTTPS staging assertions. See [exact revisions, runs and readiness](docs/staging-readiness.md); final-head CI must pass before review readiness. Existing business calculations and transaction modules are preserved.

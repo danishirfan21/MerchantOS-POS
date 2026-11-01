@@ -25,6 +25,8 @@ jobs:
           for file in db/init/*.sql db/migrations/*.sql; do psql -h 127.0.0.1 -p 5433 -U merchantos -d merchantos -v ON_ERROR_STOP=1 -f "$file"; done
           dotnet build services/merchant-api/MerchantOS.Api.csproj -c Release
           python3 scripts/ci_accounts.py
+      - name: Validate recurring backup calendar
+        run: systemd-analyze calendar '*-*-* 02:00:00 UTC'
       - name: Real backup, S3, outbox, signed witness and alert delivery verification
         run: python3 deploy/operations/verify_operations.py
       - name: Audit operational evidence before upload

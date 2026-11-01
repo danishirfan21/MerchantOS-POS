@@ -1,5 +1,5 @@
 """Generate private local staging material only; no public certificate requests or known passwords."""
-import argparse,pathlib,os,secrets,subprocess
+import argparse,pathlib,os,secrets,subprocess,uuid
 p=argparse.ArgumentParser();p.add_argument('--output',required=True);a=p.parse_args();out=pathlib.Path(a.output).resolve()
 if out.exists() and any(out.iterdir()):raise SystemExit('Refusing to overwrite existing staging material.')
 os.umask(0o077);out.mkdir(parents=True,exist_ok=True);s=out/'secrets';s.mkdir();recovery=out/'recovery-material';recovery.mkdir(mode=0o700);uid=os.getuid() or 1654
@@ -32,5 +32,5 @@ if os.getuid()==0:
 if os.environ.get('GITHUB_ACTIONS')=='true':
  with open(os.environ['GITHUB_ENV'],'a') as f:
   for name,value in values.items():
-   print('::add-mask::'+value);f.write('STAGING_'+name.upper()+'='+value+'\n')
+   print('::add-mask::'+value);f.write('STAGING_'+name.upper()+'='+value+'\n');f.write('STAGING_'+uuid.uuid4().hex+('_TOKEN' if name.endswith('_token') else '_PASSWORD')+'='+value+'\n')
 print('Private local staging material created. CA trust is local only; no public services configured.')
