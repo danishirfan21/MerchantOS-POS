@@ -27,7 +27,8 @@ def run(config_path):
   try:
    spool=pathlib.Path(config['spoolDirectory']);spool.mkdir(mode=0o700,parents=True,exist_ok=True);existing=set(spool.glob('*.dump.cms'))
    env={**os.environ,**{k:v for k,v in config.get('databaseEnvironment',{}).items() if k in ['PGHOST','PGPORT','PGUSER','PGDATABASE','PGPASSFILE']}}
-   command=[sys.executable,str(pathlib.Path(__file__).resolve().parents[1]/'backup.py'),'--output',str(spool),'--public-cert',config['encryptionCertificate']]
+   command=[sys.executable,str(pathlib.Path(__file__).resolve().parents[1]/'backup.py'),'--output',str(spool),'--public-cert',config['encryptionCertificate'],'--retain-all-local']
+   subprocess.run(['openssl','x509','-in',config['encryptionCertificate'],'-checkend','0','-noout'],check=True,capture_output=True,timeout=10)
    subprocess.run(command,env=env,check=True,capture_output=True,timeout=300)
    new=set(spool.glob('*.dump.cms'))-existing
    if len(new)!=1:raise ValueError('Exactly one completed encrypted backup required')
@@ -49,6 +50,13 @@ def run(config_path):
    receipt={'schema':1,'createdUtc':iso(),'objects':objects,'retention':store.policy(),'restoreVerified':False}
    receipt_data=__import__('common').canonical(receipt);receipt_object=store.put('receipts/'+backup.name+'.json',receipt_data)
    atomic_json(state/'latest-backup-receipt.json',receipt)
+   index_file=state/'uploaded-index.json';index=json.loads(index_file.read_text()) if index_file.exists() else {};index.update(objects)
+   for name,obj in list(index.items()):
+    file=spool/name
+    if file.exists() and file.stat().st_mtime<time.time()-7*86400:
+     head=store.client.head_object(Bucket=store.bucket,Key=obj['key'],VersionId=obj['versionId'])
+     if head.get('ObjectLockMode')=='COMPLIANCE' and head['ObjectLockRetainUntilDate']>now() and head.get('Metadata',{}).get('sha256')==obj['sha256']:file.unlink();del index[name]
+   atomic_json(index_file,index)
    result.update(status='success',lastSuccessfulUtc=iso(),backupSeconds=round(backup_seconds,3),uploadSeconds=round(time.monotonic()-upload_started,3),totalSeconds=round(time.monotonic()-started,3),receipt=receipt_object)
    atomic_json(previous,result)
    return result

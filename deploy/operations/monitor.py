@@ -34,7 +34,8 @@ def collect(config):
    result=subprocess.check_output(['openssl','x509','-in',path,'-enddate','-noout'],text=True,stderr=subprocess.DEVNULL);expiry=datetime.datetime.strptime(result.strip().split('=',1)[1],'%b %d %H:%M:%S %Y %Z').replace(tzinfo=datetime.timezone.utc);values[name+'_certificate_days']=(expiry-clock).total_seconds()/86400
   except Exception:values[name+'_certificate_days']=-1
  verification=pathlib.Path(config.get('restoreVerificationFile','/missing'))
- values['restore_verification_age_seconds']=(clock-datetime.datetime.fromisoformat(json.loads(verification.read_text())['verifiedUtc'])).total_seconds() if verification.exists() else 1e12
+ restore=json.loads(verification.read_text()) if verification.exists() else {};values['restore_verification_failed']=int(restore.get('result')!='passed');values['restore_verification_age_seconds']=(clock-datetime.datetime.fromisoformat(restore['verifiedUtc'])).total_seconds() if restore.get('result')=='passed' else 1e12
+ audit_path=pathlib.Path(config.get('auditVerificationFile','/missing'));audit=json.loads(audit_path.read_text()) if audit_path.exists() else {};values['audit_integrity_failed']=int(audit.get('result')=='failed');values['audit_verification_age_seconds']=(clock-datetime.datetime.fromisoformat(audit['verifiedUtc'])).total_seconds() if audit.get('result')=='passed' else 1e12
  policy=json.loads(pathlib.Path(config['securityPolicy']).read_text());dates=[datetime.date.fromisoformat(e['expiresUtc']) for e in policy.get('exceptions',[])];values['security_exception_days']=min((d-clock.date()).days for d in dates) if dates else 99999
  release=pathlib.Path(config['releaseGate']);values['release_vulnerability_blocked']=int(not release.exists() or not json.loads(release.read_text()).get('stagingPolicyPassed',False))
  previous=pathlib.Path(config['metricsState'])
@@ -62,9 +63,9 @@ class Alerts:
     del self.state['active'][name]
   atomic_json(self.path,self.state)
  def enqueue(self,rule,current,status,value):
-  event={'schema':1,'alert':rule['name'],'severity':rule['severity'],'state':status,'startedAtEpoch':current['since'],'runbook':rule['runbook'],'value':value};event['deliveryId']=digest(canonical(event));self.state['pending'][event['deliveryId']]=event
+  event={'schema':1,'alert':rule['name'],'severity':rule['severity'],'state':status,'startedAtEpoch':current['since'],'runbook':rule['runbook'],'value':value};self.state['nextDeliverySequence']=self.state.get('nextDeliverySequence',0)+1;event['deliverySequence']=self.state['nextDeliverySequence'];event['deliveryId']=digest(canonical(event));self.state['pending'][event['deliveryId']]=event
  def deliver(self,receiver,ca,token):
-  for key,event in list(self.state['pending'].items()):
+  for key,event in sorted(self.state['pending'].items(),key=lambda pair:pair[1]['deliverySequence']):
    try:request(receiver,ca,token,event)
    except Exception:continue
    del self.state['pending'][key];atomic_json(self.path,self.state)

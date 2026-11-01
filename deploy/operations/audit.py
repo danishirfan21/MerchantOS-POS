@@ -62,10 +62,13 @@ def verify_checkpoint(storage_path,path,certificate):
  return result
 
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('action',choices=['export','checkpoint','verify']);p.add_argument('--storage',required=True);p.add_argument('--database');p.add_argument('--checkpoint');p.add_argument('--certificate');p.add_argument('--private-key');p.add_argument('--head-key');p.add_argument('--head-hash');p.add_argument('--previous');a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('action',choices=['export','checkpoint','verify']);p.add_argument('--storage',required=True);p.add_argument('--database');p.add_argument('--checkpoint');p.add_argument('--certificate');p.add_argument('--private-key');p.add_argument('--head-key');p.add_argument('--head-hash');p.add_argument('--previous');p.add_argument('--status-file');a=p.parse_args()
  try:
   if a.action=='export':result=export(a.database,a.storage)
   elif a.action=='checkpoint':result=checkpoint(a.storage,a.head_key,a.head_hash,a.checkpoint,a.certificate,a.private_key,a.previous)
   else:result=verify_checkpoint(a.storage,a.checkpoint,a.certificate)
+  if a.status_file:atomic_json(a.status_file,{'result':'passed','verifiedUtc':iso(),'events':result.get('events',0),'headHash':result.get('headHash')})
   print(json.dumps(result))
- except Exception as error:raise SystemExit('Audit operation failed: '+type(error).__name__+'; private details omitted; pending events retained')
+ except Exception as error:
+  if a.status_file:atomic_json(a.status_file,{'result':'failed','verifiedUtc':iso(),'failureCategory':type(error).__name__})
+  raise SystemExit('Audit operation failed: '+type(error).__name__+'; private details omitted; pending events retained')

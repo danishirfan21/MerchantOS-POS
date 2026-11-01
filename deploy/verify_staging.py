@@ -123,6 +123,9 @@ try:
  config=json.loads(run('config','--format','json').stdout)
  for service in ['pos-api','admin','web']:
   c=config['services'][service];check(c['read_only']);check('ALL' in c['cap_drop']);check(c.get('user') not in ['0','root','0:0']);check(not c.get('privileged',False))
+ for service in ['pos-api','admin']:
+  for volume in config['services'][service].get('volumes',[]):check(not any(name in volume.get('source','') for name in ['backup_key.pem','witness.key','operator_connection','owner_connection']))
+  check(run('exec','-T',service,'sh','-c','test ! -r /run/secrets/backup_key.pem && test ! -r /run/secrets/operator_connection',ok=False).returncode==0)
  for service in ['pos-api','admin','db']:check(not config['services'][service].get('ports'))
  for port in config['services']['web']['ports']:check(port['host_ip']=='127.0.0.1')
  check(probe('/')[0]==200);check(probe('/api/products')[0]==401);check(probe('/api/health/live')[0]==200);check(probe('/health/live',admin=True)[0]==200)
@@ -338,6 +341,10 @@ try:
   (work/'recovered-material').rmdir()
   for directory in ['pos-keys','admin-keys']:(work/directory).chmod(0o700)
   run('build');run('up','-d','db')
+  for attempt in range(60):
+   if run('exec','-T','db','pg_isready','-h','127.0.0.1','-U','merchantos','-d','merchantos',ok=False).returncode==0:break
+   time.sleep(1)
+  else:raise RuntimeError('Fresh disaster-recovery database did not become ready')
   missing=run('run','--rm','--no-deps','restore','/ops/restore.py','/backups/'+latest.name,'--target','merchant_restore_missing_key','--confirm-isolated','--private-key','/missing.key',ok=False);check(missing.returncode!=0)
   check(sql("SELECT count(*) FROM pg_database WHERE datname='merchant_restore_missing_key'")=='0')
   restore_started=time.monotonic()

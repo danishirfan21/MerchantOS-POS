@@ -18,5 +18,6 @@ class AuditTests(unittest.TestCase):
    with zipfile.ZipFile(z,'w',zipfile.ZIP_DEFLATED) as archive:archive.writestr('report.json',payload)
    self.check_content(b'<html>data:application/zip;base64,'+base64.b64encode(z.getvalue())+b'</html>',blocked)
  def test_source_markers_are_not_key_material(self):self.check_content(b"assert '<encryptedSecret' in xml; marker='-----BEGIN PRIVATE KEY-----'",False)
+ def test_known_otp_inside_unrelated_hex_digest_is_not_a_code(self):self.check_content(b'checksum='+b'a'*30+b'918273'+b'f'*28,False)
  def test_dump_marker_in_source_is_not_a_dump(self):self.check_content(b'const magic="PGDMP"; safe source excerpt',False)
 if __name__=='__main__':unittest.main()

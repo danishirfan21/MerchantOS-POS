@@ -18,7 +18,9 @@ def check(value,label):
  assert value,label;checks+=1
 def secret():
  import secrets
- value=secrets.token_urlsafe(36);print('::add-mask::'+value,flush=True);return value
+ value=secrets.token_urlsafe(36);print('::add-mask::'+value,flush=True)
+ with open(os.environ['GITHUB_ENV'],'a') as output:output.write('TEST_M9_'+uuid.uuid4().hex+'_PASSWORD='+value+'\n')
+ return value
 def expect_failure(fn,label):
  try:fn()
  except Exception:check(True,label);return
@@ -77,6 +79,9 @@ try:
  client.put_object(Bucket=store.bucket,Key=first['headKey'],Body=b'{}');expect_failure(lambda:verify_checkpoint(storage,anchor,str(witness_cert)),'Modified retained batch detected')
  client.put_object(Bucket=store.bucket,Key=first['headKey'],Body=original);client.delete_object(Bucket=store.bucket,Key=first['headKey']);expect_failure(lambda:verify_checkpoint(storage,anchor,str(witness_cert)),'Missing audit batch detected')
  client.put_object(Bucket=store.bucket,Key=first['headKey'],Body=original);check(verify_checkpoint(storage,anchor,str(witness_cert))['batches']==2,'Recovery preserves trusted audit anchor')
+ # Replay and reordering are rejected even when an attacker recomputes an unsigned batch hash.
+ bad=json.loads(store.get(first['headKey']));bad['events']=list(reversed(bad['events']));bad['firstSequence']=bad['events'][0]['sequence'];bad['lastSequence']=bad['events'][-1]['sequence'];bad_obj=store.put('bad-order',canonical(bad));expect_failure(lambda:verify_chain(store,bad_obj['key'],bad_obj['sha256']),'Reordered batch rejected')
+ bad=json.loads(store.get(first['headKey']));bad['events'][1]['payload']=bad['events'][0]['payload'];bad_obj=store.put('bad-replay',canonical(bad));expect_failure(lambda:verify_chain(store,bad_obj['key'],bad_obj['sha256']),'Repeated logical event rejected')
  # Storage conditional write and enforced version retention in the isolated service.
  held=store.put('retained-test',b'private encrypted test marker');check(store.put('retained-test',b'private encrypted test marker')['sha256']==held['sha256'],'Duplicate upload readback idempotent');expect_failure(lambda:store.put('retained-test',b'different'),'Overwrite collision rejected')
  try:client.delete_object(Bucket=store.bucket,Key=held['key'],VersionId=held['versionId']);capabilities['localRetentionDeleteDenied']=False
@@ -97,6 +102,7 @@ try:
  altered=json.loads(receipt.read_text());next(iter(altered['objects'].values()))['sha256']='0'*64;atomic_json(private/'corrupt-receipt.json',altered);shutil.copyfile(receipt.with_suffix('.p7s'),(private/'corrupt-receipt.json').with_suffix('.p7s'));expect_failure(lambda:retrieve(backup_storage,private/'corrupt-receipt.json',private/'corrupt-output',str(witness_cert)),'Corrupt backup receipt rejected')
  encrypted=next(download.glob('*.dump.cms'));missing=subprocess.run(['openssl','cms','-decrypt','-binary','-inform','DER','-in',str(encrypted),'-inkey',str(private/'missing.key'),'-out','/dev/null'],capture_output=True);check(missing.returncode!=0,'Missing recovery private key fails closed')
  bad_config=read_config_for_test=json.loads(config.read_text());bad_config=copy.deepcopy(bad_config);bad_config['databaseEnvironment']['PGUSER']='missing-account';atomic_json(private/'bad-backup.json',bad_config);expect_failure(lambda:backup_run(private/'bad-backup.json'),'Failed backup is detected');check(json.loads((state/'backup-status.json').read_text())['status']=='failed','Backup failure state observable')
+ old_cipher=next((private/'spool').glob('*.dump.cms'));os.utime(old_cipher,(time.time()-8*86400,time.time()-8*86400));unverified=private/'spool/unverified.dump.cms';unverified.write_bytes(b'unverified ciphertext fixture');os.utime(unverified,(time.time()-8*86400,time.time()-8*86400));check(backup_run(config)['status']=='success','Scheduled retry recovers after backup failure');check(not old_cipher.exists() and unverified.exists(),'Local retention prunes only verified uploads and preserves unuploaded backups')
  # Preserve real table contents and enforce post-restore quarantine in a fresh database.
  tables=['products','inventory_levels','orders','order_items','payments','checkout_idempotency','auth_users','auth_recovery_codes','admin_audit','inventory_adjustments']
  def snapshot(dsn):
@@ -119,6 +125,6 @@ try:
  check(len(fixture.received)>=len(scenarios),'Controlled failure alerts arrive at isolated receiver');before=len(fixture.received);engine.deliver(fixture.receiver_url,fixture.ca,fixture.token);check(len(fixture.received)==before,'Delivery logical duplicates suppressed')
  engine.evaluate({},1300);engine.deliver(fixture.receiver_url,fixture.ca,fixture.token);check(sum(e['state']=='resolved' for e in fixture.received.values())==before,'Alerts resolve after recovery')
  readiness=assess({'operationsIntegration':True});check(readiness['isolatedStaging']=='GO' and readiness['publicProduction']=='NO-GO','Local tests never invent production custody approval')
- result={'result':'passed','assertions':checks,'sourceRevision':os.environ.get('SOURCE_REVISION',os.environ.get('GITHUB_SHA','local')),'timings':timings,'localCapabilities':capabilities,'scope':'TLS S3 simulation and real PostgreSQL; genuine off-host durability/retention/live routing unverified','externalVerification':'pending','credentialAudit':'pending'}
+ result={'result':'passed','assertions':checks,'sourceRevision':os.environ.get('SOURCE_REVISION',os.environ.get('GITHUB_SHA','local')),'timings':timings,'localCapabilities':capabilities,'scope':'TLS S3 simulation and real PostgreSQL; genuine off-host durability/retention/live routing unverified','alertScenarios':sorted({e['alert'] for e in fixture.received.values()}),'alertStatesVerified':['firing','resolved'],'externalVerification':'pending','credentialAudit':'pending'}
  pathlib.Path('operations-results.json').write_text(json.dumps(result,indent=2));print('Operational integration passed: '+str(checks)+' assertions; no private artifacts retained.')
 finally:fixture.close()

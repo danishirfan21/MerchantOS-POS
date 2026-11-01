@@ -214,5 +214,41 @@
     "forSeconds": 60,
     "severity": "warning",
     "runbook": "docs/operations/monitoring.md#checkouterrors"
+  },
+  {
+    "name": "BackupCertificateExpiry",
+    "metric": "backup_certificate_days",
+    "comparison": "lt",
+    "threshold": 30,
+    "forSeconds": 0,
+    "severity": "warning",
+    "runbook": "docs/operations/monitoring.md#backupcertificateexpiry"
+  },
+  {
+    "name": "AuditIntegrityFailed",
+    "metric": "audit_integrity_failed",
+    "comparison": "gt",
+    "threshold": 0,
+    "forSeconds": 60,
+    "severity": "critical",
+    "runbook": "docs/operations/monitoring.md#auditintegrityfailed"
+  },
+  {
+    "name": "AuditVerificationOverdue",
+    "metric": "audit_verification_age_seconds",
+    "comparison": "gt",
+    "threshold": 3600,
+    "forSeconds": 60,
+    "severity": "critical",
+    "runbook": "docs/operations/monitoring.md#auditverificationoverdue"
+  },
+  {
+    "name": "RestoreVerificationFailed",
+    "metric": "restore_verification_failed",
+    "comparison": "gt",
+    "threshold": 0,
+    "forSeconds": 60,
+    "severity": "critical",
+    "runbook": "docs/operations/monitoring.md#restoreverificationfailed"
   }
 ]

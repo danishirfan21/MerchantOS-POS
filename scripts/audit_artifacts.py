@@ -1,7 +1,8 @@
 """Fail closed before upload; inspect decoded archives, not random encoded ZIP bytes."""
 import base64,io,os,re,sys,zipfile
 from pathlib import Path
-secrets=[v.encode() for k,v in os.environ.items() if k.startswith(('TEST_','STAGING_')) and ((k.endswith(('_PASSWORD','_MFA_SECRET')) and len(v)>=14) or (k.endswith(('_MFA_CODE','_OTP')) and len(v)==6))]
+secrets=[v.encode() for k,v in os.environ.items() if k.startswith(('TEST_','STAGING_')) and k.endswith(('_PASSWORD','_MFA_SECRET','_TOKEN','_SECRET_ACCESS_KEY','_ACCESS_KEY_ID')) and len(v)>=14]
+otps=[v.encode() for k,v in os.environ.items() if k.startswith(('TEST_','STAGING_')) and k.endswith(('_MFA_CODE','_OTP')) and len(v)==6]
 findings=[];count=0
 embedded=re.compile(rb'data:application/zip;base64,([A-Za-z0-9+/=]+)')
 def inspect(data,label):
@@ -17,7 +18,8 @@ def inspect(data,label):
  for match in embedded.finditer(data):inspect(base64.b64decode(match.group(1),validate=True),label+' (embedded report)')
  data=embedded.sub(b'[decoded and inspected ZIP]',data)
  reasons=[]
- if any(s in data for s in secrets):reasons.append('ephemeral password')
+ if any(s in data for s in secrets):reasons.append('ephemeral credential/factor')
+ if any(re.search(rb'(?<![A-Za-z0-9])'+re.escape(code)+rb'(?![A-Za-z0-9])',data) for code in otps):reasons.append('known one-time code')
  if re.search(rb'MRC_[A-F0-9]{64}|MCH_[A-F0-9]{64}',data):reasons.append('factor/restricted challenge material')
  if re.search(rb'otpauth://[^\s\"<>]+secret=[A-Z2-7]{20,}',data):reasons.append('active enrollment URI')
  if re.search(rb'CfDJ[A-Za-z0-9_-]{60,}',data):reasons.append('protected cookie/CSRF value')
