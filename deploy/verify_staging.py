@@ -1,10 +1,18 @@
 """Mutating operational drill: fresh isolated local Compose project only. No public deployment."""
+import sys,re,base64,secrets
 import argparse,concurrent.futures,contextlib,hashlib,http.cookiejar,json,os,pathlib,shutil,socket,ssl,statistics,subprocess,tempfile,time,urllib.error,urllib.request,uuid,tarfile
 p=argparse.ArgumentParser();p.add_argument('--directory',required=True);p.add_argument('--admin-context',required=True);a=p.parse_args()
 if os.environ.get('GITHUB_ACTIONS')!='true':raise SystemExit('This destructive drill is CI-only. Use runbook smoke reads for an existing staging installation.')
 root=pathlib.Path(__file__).resolve().parents[1];work=pathlib.Path(a.directory).resolve();assert not work.exists(),'Fresh disposable path required'
 subprocess.run(['python3',str(root/'deploy/init-local.py'),'--output',str(work)],check=True)
 # init-local writes GITHUB_ENV for later steps; this process reads only its private generated files.
+sys.path.insert(0,str(root/'scripts'))
+from mfa_fixture import totp,take
+factors=work/'factors';factors.mkdir(mode=0o700)
+def private(path,value):path.write_text(value);path.chmod(0o600)
+def mask(value):
+ print('::add-mask::'+value,flush=True)
+ with open(os.environ['GITHUB_ENV'],'a') as f:f.write('STAGING_MFA_SECRET_'+uuid.uuid4().hex+'='+value+'\n')
 secret=work/'secrets';project='merchantos_ops_'+os.environ['GITHUB_RUN_ID']+'_'+os.environ.get('GITHUB_RUN_ATTEMPT','1')
 env={**os.environ,'STAGING_DIR':str(work),'STAGING_UID':str(os.getuid() or 1654),'ADMIN_CONTEXT':str(pathlib.Path(a.admin_context).resolve()),'COMPOSE_PROJECT_NAME':project,'SEED_DEMO':'true'}
 base=['docker','compose','--env-file',str(work/'staging.env'),'-f',str(root/'deploy/compose.yml')]
@@ -41,8 +49,14 @@ class Client:
  def __init__(self,role):self.jar=http.cookiejar.CookieJar();self.http=opener(self.jar);self.token='';self.role=role
  def csrf(self):
   s,b,_=probe('/api/auth/csrf',client=self.http);check(s==200);self.token=json.loads(b)['token']
- def login(self):
-  self.csrf();s,b,h=probe('/api/auth/login',{'username':(secret/(self.role+'_username')).read_text(),'password':(secret/(self.role+'_password')).read_text()},client=self.http,headers={'X-CSRF-TOKEN':self.token});check(s==200);self.csrf();return self
+ def login(self,temporary=None):
+  self.csrf();s,b,h=probe('/api/auth/login',{'username':(secret/(self.role+'_username')).read_text(),'password':temporary or (secret/(self.role+'_password')).read_text()},client=self.http,headers={'X-CSRF-TOKEN':self.token});check(s in [200,202])
+  if s==202:
+   challenge=json.loads(b);check(self.call('/api/auth/me')[0]==401);body={}
+   if challenge['step']!='password':body['recoveryCode']=take(factors/(self.role+'.codes'))
+   if challenge['mustChangePassword']:body['newPassword']=(secret/(self.role+'_password')).read_text()
+   check(self.call('/api/auth/mfa/complete',body)[0]==200)
+  self.csrf();return self
  def call(self,path,data=None):
   s,b,h=probe(path,data,client=self.http,headers={'X-CSRF-TOKEN':self.token} if data is not None else {});
   try:value=json.loads(b) if b else None
@@ -54,22 +68,39 @@ class Client:
    if result[0] not in [0,502,503]:return result
    time.sleep(2)
   return result
- def mvc_login(self):
+ def mvc_login(self,temporary=None):
   import re,urllib.parse
   with self.http.open('https://localhost:9443/Account/Login') as r:html=r.read().decode()
   token=re.search(r'name="__RequestVerificationToken"[^>]*value="([^"]+)"',html)[1]
-  data=urllib.parse.urlencode({'Username':(secret/(self.role+'_username')).read_text(),'Password':(secret/(self.role+'_password')).read_text(),'ReturnUrl':'/','__RequestVerificationToken':token}).encode()
-  with self.http.open(urllib.request.Request('https://localhost:9443/Account/Login',data=data)) as r:check(r.status==200)
-  return self
+  data=urllib.parse.urlencode({'Username':(secret/(self.role+'_username')).read_text(),'Password':temporary or (secret/(self.role+'_password')).read_text(),'ReturnUrl':'/','__RequestVerificationToken':token}).encode()
+  with self.http.open(urllib.request.Request('https://localhost:9443/Account/Login',data=data)) as r:check(r.status==200);html=r.read().decode()
+  check('Verify' in html);check(b'Sign In' in self.mvc('/Admin/Orders')[1])
+  token=re.search(r'name="__RequestVerificationToken"[^>]*value="([^"]+)"',html)[1]
+  form={'__RequestVerificationToken':token}
+  key=re.search(r'id="ManualKey"[^>]*>([A-Z2-7]+)</',html)
+  if key:
+   value=key[1];mask(value);private(secret/(self.role+'_mfa_secret'),value);form['Code']=totp(value);mask(form['Code'])
+  else:form['RecoveryCode']=take(factors/(self.role+'.codes'))
+  if temporary:form.update(NewPassword=(secret/(self.role+'_password')).read_text(),ConfirmPassword=(secret/(self.role+'_password')).read_text())
+  with self.http.open(urllib.request.Request('https://localhost:9443/Account/Verify',data=urllib.parse.urlencode(form).encode())) as r:check(r.status==200);html=r.read().decode()
+  codes=re.findall(r'MRC_[A-F0-9]{64}',html)
+  if codes:private(factors/(self.role+'.codes'),'\n'.join(codes)+'\n')
+  check(self.mvc('/Admin/Orders')[0]==200);check(b'Sign In' not in self.mvc('/Admin/Orders')[1]);return self
  def mvc(self,path):return probe(path,admin=True,client=self.http)
 def operator(op,role='admin',targetrole=None):
- args=['run','--rm','--no-deps','-v',str(secret)+':/operator:ro','-e','Operations__AllowAccountCommand=true','-e','Account__Operation='+op,'-e','Account__UsernameFile=/operator/'+role+'_username']
- if op in ['create','password']:args+=['-e','Account__PasswordFile=/operator/'+role+'_password']
+ args=['run','--rm','--no-deps','-v',str(secret)+':/operator:ro','-v',str(factors)+':/factors','-e','Operations__AllowAccountCommand=true','-e','Account__Operation='+op,'-e','Account__UsernameFile=/operator/'+role+'_username']
+ if op in ['create','password','recover','restore-recover']:args+=['-e','Account__PasswordFile=/operator/'+role+'_password']
+ if op in ['password','recover','restore-recover']:args+=['-e','Operations__AllowRecovery=true','-e','Operations__OperatorCase='+str(uuid.uuid4())]
+ if op=='restore-recover':args+=['-e','Operations__AllowMfaReset=true','-e','Operations__AllowRestoreRelease=true','-e','ConnectionStrings__MerchantDbFile=/operator/owner_connection']
+ if op=='mfa-seed':args+=['-e','Operations__AllowMfaEnrollment=true','-e','Account__MfaSecretFile=/operator/'+role+'_mfa_secret','-e','Account__CodeFile=/operator/'+role+'_mfa_code','-e','Account__RecoveryFile=/factors/'+role+'.codes','-e','Account__RecoveryCount=100']
  if targetrole:args+=['-e','Account__Role='+targetrole]
  return run(*args,'pos-api','--account')
+def seed_mfa(role):
+ value=base64.b32encode(secrets.token_bytes(32)).decode().rstrip('=');mask(value);private(secret/(role+'_mfa_secret'),value);code=totp(value);mask(code);private(secret/(role+'_mfa_code'),code)
+ (factors/(role+'.codes')).unlink(missing_ok=True);operator('mfa-seed',role)
 def snapshot(database='merchantos'):
  # Canonical hashes cover every persisted field, including encrypted ticket blobs and expiry.
- tables=['products','inventory_levels','orders','order_items','payments','checkout_idempotency','auth_users','auth_sessions','admin_audit','inventory_adjustments','admin_ticket_sessions']
+ tables=['products','inventory_levels','orders','order_items','payments','checkout_idempotency','auth_users','auth_sessions','admin_audit','inventory_adjustments','admin_ticket_sessions','auth_challenges','auth_recovery_codes','security_events','auth_restore_blocks']
  return {t:sql("SELECT md5(coalesce(string_agg(row_to_json(x)::text,E'\\n' ORDER BY row_to_json(x)::text),'')) FROM "+t+' x',database) for t in tables}
 def measure(name,fn,n=3):
  values=[]
@@ -77,7 +108,12 @@ def measure(name,fn,n=3):
   start=time.perf_counter();result=fn();values.append((time.perf_counter()-start)*1000);check(result[0]==200)
  timings[name]={'samples':n,'p50Ms':round(statistics.median(values),2),'maxMs':round(max(values),2),'operationsPerSecond':round(n/(sum(values)/1000),2)}
 try:
- run('build',ok=True);run('up','-d','db');run('run','--rm','migrate');run('up','-d','pos-api','admin','web');wait_ready()
+ run('build',ok=True)
+ images=['api='+project+'-pos-api','admin='+project+'-admin','web='+project+'-web','db='+project+'-db','ops='+project+'-ops']
+ scan=['python3',str(root/'deploy/security-review.py'),'--images-only','--output',str(evidence/'security')]
+ for image in images:scan+=['--image',image]
+ subprocess.run(scan,check=True);subprocess.run(['python3',str(root/'deploy/security-gate.py'),'--evidence',str(evidence/'security')],check=True)
+ run('up','-d','db');run('run','--rm','migrate');run('up','-d','pos-api','admin','web');wait_ready()
  # Configuration and port boundary, no public listener or privileged normal app.
  config=json.loads(run('config','--format','json').stdout)
  for service in ['pos-api','admin','web']:
@@ -98,6 +134,7 @@ try:
  try:redirect.open('https://localhost:9443/Admin/Orders')
  except urllib.error.HTTPError as e:check(e.code==302);check(e.headers['Location'].startswith('https://localhost:9443/Account/Login'))
  for role,target in [('admin','Administrator'),('cashier','Cashier'),('other','Administrator')]:operator('create',role,target)
+ seed_mfa('admin')
  admin=Client('admin').login();cashier=Client('cashier').login();mvc=Client('admin').mvc_login();other=Client('other').mvc_login()
  check(admin.call('/api/orders')[0]==200);check(cashier.call('/api/admin/reports/sales')[0]==403);check(cashier.call('/api/checkout',{})[0]==400)
  cookie=next(c for c in cashier.jar if c.name=='MerchantOS.Pos.Session');check(cookie.secure);check(any(k.lower()=='httponly' for k in cookie._rest));check({k.lower():str(v).lower() for k,v in cookie._rest.items()}.get('samesite')=='strict')
@@ -148,7 +185,11 @@ try:
  # Encryption backup, real isolated restore, then application/session recovery against the restored DB.
  run('run','--rm','--no-deps','backup');backup=sorted((work/'backups').glob('*.dump.cms'))[-1]
  run('run','--rm','--no-deps','restore','/ops/restore.py','/backups/'+backup.name,'--target','merchant_restore_drill','--confirm-isolated')
- check(snapshot('merchant_restore_drill')==before_restore)
+ restored_snapshot=snapshot('merchant_restore_drill')
+ for table,digest in before_restore.items():
+  if table not in ['security_events','auth_restore_blocks']:check(restored_snapshot[table]==digest)
+ check(sql('SELECT count(*) FROM auth_restore_blocks','merchant_restore_drill')==sql('SELECT count(*) FROM auth_users','merchant_restore_drill'))
+ check(sql("SELECT count(*) FROM security_events WHERE category='restore_quarantined'",'merchant_restore_drill')=='1')
  # Keys are a separate recovery dependency: restore a private snapshot, not a DB table.
  keybackup=work/'protected-keys.tar'
  with tarfile.open(keybackup,'w') as archive:
@@ -156,7 +197,7 @@ try:
  # Encrypt key archive before storing; offline backup private key is not mounted by the backup service.
  subprocess.run(['openssl','cms','-encrypt','-binary','-aes-256-cbc','-in',str(keybackup),'-outform','DER','-out',str(work/'protected-keys.cms'),str(secret/'backup_cert.pem')],check=True);keybackup.unlink()
  run('stop','pos-api','admin')
- for name in ['pos_connection','admin_connection']:
+ for name in ['pos_connection','admin_connection','owner_connection']:
   path=secret/name;path.write_text(path.read_text().replace('Database=merchantos;','Database=merchant_restore_drill;'))
  run('run','--rm','--no-deps','-e','PGDATABASE=merchant_restore_drill','migrate','/ops/roles.py')
  # Decrypt/restore the protected key directory separately and restart the consumers.
@@ -167,7 +208,22 @@ try:
  for directory in ['pos-keys','admin-keys']:
   (work/directory).chmod(0o700)
   for file in (work/directory).glob('*.xml'):file.chmod(0o600)
- run('up','-d','pos-api','admin');wait_ready();check(mvc.mvc('/Admin/Orders')[0]==200);check(cashier.call('/api/orders/'+order)[0]==200);check(snapshot('merchant_restore_drill')==before_restore)
+ run('up','-d','pos-api','admin');wait_ready()
+ # Restored identity data is preserved, but every restored authority is quarantined.
+ check(b'Sign In' in mvc.mvc('/Admin/Orders')[1]);check(cashier.call('/api/orders/'+order)[0]==401)
+ old_codes={role:take(factors/(role+'.codes')) for role in ['admin','other']}
+ temporary={}
+ for role in ['admin','cashier','other']:
+  temporary[role]=(secret/(role+'_password')).read_text();operator('restore-recover',role)
+  replacement=secrets.token_urlsafe(32);mask(replacement);private(secret/(role+'_password'),replacement)
+ seed_mfa('admin')
+ admin=Client('admin').login(temporary['admin']);cashier=Client('cashier').login(temporary['cashier']);mvc=Client('admin').mvc_login();other=Client('other').mvc_login(temporary['other'])
+ check(sql('SELECT count(*) FROM auth_restore_blocks','merchant_restore_drill')=='0');check(cashier.call('/api/orders/'+order)[0]==200)
+ for table in ['products','inventory_levels','orders','order_items','payments','checkout_idempotency','admin_audit','inventory_adjustments']:check(snapshot('merchant_restore_drill')[table]==before_restore[table])
+ # A recovery code from before restore cannot redeem after explicit reconciliation.
+ stale=Client('admin');stale.csrf();check(stale.call('/api/auth/login',{'username':(secret/'admin_username').read_text(),'password':(secret/'admin_password').read_text()})[0]==202)
+ check(stale.call('/api/auth/mfa/complete',{'recoveryCode':old_codes['admin']})[0]==401)
+ run('restart','admin','pos-api');wait_ready();check(mvc.mvc('/Admin/Orders')[0]==200);check(cashier.call('/api/auth/me')[0]==200)
  # Correlation and safe operational signals.
  cid=uuid.uuid4().hex;s,b,h=probe('/api/products',client=admin.http,headers={'X-Correlation-ID':cid});check(h.get('X-Correlation-ID')==cid);check(admin.call('/api/ops/metrics')[0]==200)
  cid=uuid.uuid4().hex;check(probe('/Admin/Orders',admin=True,client=mvc.http,headers={'X-Correlation-ID':cid})[0]==200)

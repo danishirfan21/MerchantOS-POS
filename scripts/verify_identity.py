@@ -103,6 +103,29 @@ try:
  check(pending.factor(recoveryCode=take(private/(enrolled+'.codes')))[0]==401,'Expired challenge rejected')
  account(enrolled,'role',role='Cashier');check(active.me()==401,'Role change invalidates prior sessions')
  account(enrolled,'disable');check(Client().login(enrolled,pwd)[0]==401,'Disabled account blocked')
+ # Regeneration rotates all old verifiers and revokes existing sessions.
+ rotated,pwd,sec=fresh(True);old=take(private/(rotated+'.codes'));active=sign(rotated,pwd,take(private/(rotated+'.codes')))
+ check(active.call('/api/auth/recovery/regenerate',{'currentPassword':'invalid','code':totp(sec,1)})[0]==401,'Regeneration verifies current password')
+ check(active.call('/api/auth/recovery/regenerate',{'currentPassword':pwd,'code':totp(sec,1)},csrf=False)[0]==400,'Regeneration enforces CSRF')
+ status,batch=active.call('/api/auth/recovery/regenerate',{'currentPassword':pwd,'code':totp(sec,1)});check(status==200 and len(batch['recoveryCodes'])==10,'Fresh TOTP rotates recovery batch')
+ check(active.me()==401,'Regeneration revokes current session');newsession=sign(rotated,pwd,batch['recoveryCodes'][0]);stale=Client();stale.login(rotated,pwd)
+ check(stale.factor(recoveryCode=old)[0]==401,'Old recovery batch invalidated');check(stale.factor(code=totp(sec,1))[0]==401,'Regeneration TOTP cannot be reused')
+ sql("UPDATE auth_sessions SET mfa_verified_at=now()-interval '6 minutes' WHERE user_id=(SELECT id FROM auth_users WHERE username='"+rotated+"')")
+ check(newsession.call('/api/auth/password',{'currentPassword':pwd,'newPassword':secrets.token_urlsafe(30)})[0]==403,'Password change requires recent authoritative MFA')
+ # A failed security-event insert rolls back factor consumption and session issuance.
+ atomic,pwd,sec=fresh(True);pending=Client();pending.login(atomic,pwd);recovery=take(private/(atomic+'.codes'))
+ target=sql("SELECT id FROM auth_users WHERE username='"+atomic+"'")
+ sql("CREATE FUNCTION m8_reject_event() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.target_id='"+target+"'::uuid AND NEW.category='authentication_succeeded' THEN RAISE EXCEPTION 'isolated event failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER m8_event_failure BEFORE INSERT ON security_events FOR EACH ROW EXECUTE FUNCTION m8_reject_event()")
+ try:
+  check(pending.factor(recoveryCode=recovery)[0]==500,'Critical event failure fails authentication closed')
+  check(sql("SELECT count(*) FROM auth_sessions WHERE user_id='"+target+"'")=='0','Failed event rolls back full session')
+  check(sql("SELECT count(*) FROM auth_recovery_codes WHERE user_id='"+target+"' AND consumed_at IS NOT NULL")=='0','Failed event rolls back one-time consumption')
+ finally:sql('DROP TRIGGER m8_event_failure ON security_events; DROP FUNCTION m8_reject_event()')
+ check(pending.factor(recoveryCode=recovery)[0]==200,'Same factor succeeds after rolled-back transaction')
+ # Restore reconciliation never silently re-enables a disabled account.
+ disabled,pwd,sec=fresh(True);account(disabled,'disable');sql("INSERT INTO auth_restore_blocks(user_id) SELECT id FROM auth_users WHERE username='"+disabled+"'")
+ account(disabled,'restore-recover',password=secrets.token_urlsafe(30),extra={'Operations__AllowRestoreRelease':'true'})
+ check(sql("SELECT enabled FROM auth_users WHERE username='"+disabled+"'")=='f','Restore reconciliation preserves disabled status')
  # Persistent MFA lockout cannot be reset by successful primary-password validation.
  locked,pwd,sec=fresh(True);bad=Client();bad.login(locked,pwd)
  for _ in range(5):check(bad.factor(code='000000' if totp(sec)!='000000' else '999999')[0]==401,'Bad factor rejected')

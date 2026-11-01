@@ -33,7 +33,7 @@ public static class AccountCommand {
    if(op=="role")await IdentitySecurity.Execute(c,tx,"UPDATE auth_users SET role=@role WHERE id=@id",("role",role),("id",id));
    if(op is "password" or "recover" or "restore-recover")await IdentitySecurity.Execute(c,tx,"UPDATE auth_users SET password_hash=@hash,must_change_password=true,failures=0,locked_until=NULL WHERE id=@id",("hash",app.Services.GetRequiredService<IPasswordHasher<AuthUser>>().HashPassword(user,password)),("id",id));
    if(op is "mfa-reset" or "restore-recover")await IdentitySecurity.Execute(c,tx,"UPDATE auth_users SET mfa_enabled=false,mfa_secret=NULL,mfa_last_step=-1,mfa_failures=0,mfa_locked_until=NULL WHERE id=@id; DELETE FROM auth_recovery_codes WHERE user_id=@id",("id",id));
-   if(op=="restore-recover")await IdentitySecurity.Execute(c,tx,"UPDATE auth_users SET enabled=true WHERE id=@id; DELETE FROM auth_restore_blocks WHERE user_id=@id",("id",id));
+   if(op=="restore-recover")await IdentitySecurity.Execute(c,tx,"DELETE FROM auth_restore_blocks WHERE user_id=@id",("id",id));
    if(op=="mfa-seed")codes=await app.Services.GetRequiredService<IdentitySecurity>().OperatorEnroll(c,tx,user,config["Account:MfaSecret"]??"",config["Account:Code"]??"",config.GetValue<int?>("Account:RecoveryCount")??10);
    else await IdentitySecurity.Revoke(c,tx,id);
   }

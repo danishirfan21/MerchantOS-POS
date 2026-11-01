@@ -29,7 +29,9 @@ jobs:
       - name: Collect unsuppressed package and runtime image findings
         run: python3 deploy/security-review.py --project services/merchant-api/MerchantOS.Api.csproj --image merchantos-review-api --image merchantos-review-web --image merchantos-review-ops --image merchantos-review-db
       - name: Enforce isolated staging vulnerability policy
-        run: python3 deploy/security-gate.py --evidence security-evidence
+        run: |
+          python3 deploy/test_security_gate.py
+          python3 deploy/security-gate.py --evidence security-evidence
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always()
         with:

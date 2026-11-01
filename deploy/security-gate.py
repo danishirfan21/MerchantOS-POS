@@ -2,11 +2,13 @@
 import argparse,datetime,hashlib,json,pathlib
 p=argparse.ArgumentParser();p.add_argument('--evidence',default='security-evidence');p.add_argument('--policy',default=str(pathlib.Path(__file__).with_name('security-policy.json')));a=p.parse_args()
 root=pathlib.Path(a.evidence);policy=json.loads(pathlib.Path(a.policy).read_text());summary=json.loads((root/'summary.json').read_text());failures=[];exceptions=[];today=datetime.datetime.now(datetime.timezone.utc).date()
-if not summary.get('images'):failures.append('Missing image evidence')
+roles=set(summary.get('images',{}))
+if roles not in [{'admin'},{'api','web','db','ops'},{'api','admin','web','db','ops'}]:failures.append('Missing or unexpected release image roles')
 config=pathlib.Path(__file__).with_name('Caddyfile');config_valid=hashlib.sha256(config.read_bytes()).hexdigest()==policy['caddyConfigSha256']
 for role,image in summary.get('images',{}).items():
  if not image['imageId'].startswith('sha256:') or not image.get('rootfsLayerDigests'):failures.append('Missing immutable image identity: '+role)
  report=json.loads((root/image['report']).read_text())
+ if report.get('SchemaVersion')!=2 or not isinstance(report.get('Results'),list):failures.append('Incomplete scanner report: '+role)
  for result in report.get('Results',[]):
   for v in result.get('Vulnerabilities',[]):
    if v['Severity'] not in ['HIGH','CRITICAL']:continue

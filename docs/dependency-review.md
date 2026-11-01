@@ -32,3 +32,11 @@ The trusted local staging scope uses generated disposable data. Public productio
 | PostgreSQL base (gosu retained for supported entrypoint) | 1 | 25 | 31 | 3 | 1 |
 
 No finding is hidden by an ignore rule. The public-deployment decision remains BLOCKED. These counts are advisory-database/build observations and must be rechecked for a release.
+
+## Milestone 8 database helper build correction (verification in progress)
+
+The initial helper rebuild requested `github.com/tianon/gosu@v1.19`, which is not an installable upstream module tag. The upstream release is tagged `1.19` at commit `6456aaa0f3c854d199d0f037f068eb97515b7513`. The database builder now fetches and verifies that exact source commit, verifies its checked-in Go dependency checksums, and builds with the digest-pinned patched Go toolchain. The supported digest-pinned PostgreSQL image and its entrypoint remain in place. Only the gosu binary is replaced; its source-defined version is retained. No executable installer or third-party binary is downloaded.
+
+The build runs `gosu --version` and verifies a `nobody` process has a nonzero UID. PostgreSQL initialization and migration are verified separately by integration CI. Build flags retain symbol information for vulnerability analysis, following upstream guidance. Full unsuppressed image reports and the staging-policy gate remain enabled. This correction is not evidence of a clean scan or completed Milestone 8; final results must be recorded after the exact-head workflows finish.
+
+Upstream references: [release tag](https://github.com/tianon/gosu/tree/6456aaa0f3c854d199d0f037f068eb97515b7513), [source build instructions](https://github.com/tianon/gosu/blob/6456aaa0f3c854d199d0f037f068eb97515b7513/Dockerfile).
