@@ -1,6 +1,6 @@
-# Milestone 9 — implementation and verification in progress
+# Milestone 9 — implemented; unmerged review candidate
 
-Adds encrypted S3 backup adapters, independently signed recovery receipts/checkpoints, transactional audit outbox/export, dedicated operator privileges, scoped metrics/alert delivery and a fresh-environment recovery drill. No application redesign or financial changes. Actual tested revisions/results will be linked in the M9 PRs. Real external provider durability/retention, custody, live alert routing and staffing are not established. See [operational readiness](docs/operations/readiness.md).
+Adds encrypted S3 backup adapters, independently signed recovery receipts/checkpoints, transactional audit outbox/export, dedicated operator privileges, scoped metrics/alert delivery and a fresh-environment recovery drill. No application redesign or financial changes. [Executed verification](docs/operations/verification.md) records the passing functional baseline; final-head PR checks govern review readiness. Real external provider durability/retention, custody, live alert routing and staffing are not established. See [operational readiness](docs/operations/readiness.md).
 
 # Milestone 8 — review candidate; unmerged
 

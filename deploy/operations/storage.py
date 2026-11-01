@@ -60,5 +60,5 @@ class Store:
   if verified.hexdigest()!=sha:raise ValueError('Stored object readback integrity mismatch or overwrite collision')
   # HEAD exposes the S3 object-lock headers for the exact returned version.
   retention=self.client.head_object(Bucket=self.bucket,Key=key,VersionId=version);until=retention.get('ObjectLockRetainUntilDate')
-  if retention.get('ObjectLockMode')!='COMPLIANCE' or until is None or until<=now() or not self.days-1<=(until-retention['LastModified']).total_seconds()/86400<=91:raise ValueError('Storage did not confirm required retention')
+  if retention.get('ObjectLockMode')!='COMPLIANCE' or until is None or until<=now() or not self.days*86400-2<=(until-retention['LastModified']).total_seconds()<=90*86400+2:raise ValueError('Storage did not confirm required retention')
   return {'key':key,'versionId':version,'sha256':sha,'bytes':length,'verifiedUtc':now().isoformat(),'retentionUntilUtc':until.isoformat(),'retentionMode':'COMPLIANCE'}

@@ -11,6 +11,8 @@ from backup_job import run as backup_run,retrieve
 from monitor import Alerts,request
 from readiness import assess
 if os.environ.get('GITHUB_ACTIONS')!='true':raise SystemExit('Disposable CI-only operations drill')
+# Disposable plaintext dump/key fixtures stay on the runner's RAM-backed temporary filesystem.
+os.environ['TMPDIR']='/dev/shm';tempfile.tempdir=None
 root=pathlib.Path(__file__).resolve().parents[2];private=pathlib.Path(tempfile.mkdtemp(prefix='merchant-m9-'));private.chmod(0o700);checks=0
 owner=psycopg.conninfo.make_conninfo(host='127.0.0.1',port=5433,dbname='merchantos',user='merchantos',password=os.environ['PGPASSWORD'])
 def check(value,label):
