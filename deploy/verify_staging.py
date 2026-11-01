@@ -81,7 +81,7 @@ class Client:
    check(sql("SELECT string_agg(expires_at::text,',' ORDER BY id_hash) FROM admin_ticket_sessions")==expires)
   token=re.search(r'name="__RequestVerificationToken"[^>]*value="([^"]+)"',html)[1]
   form={'__RequestVerificationToken':token}
-  key=re.search(r'id="ManualKey"[^>]*>([A-Z2-7]+)</',html)
+  key=re.search(r'id="ManualKey"[^>]*>([A-Z2-7=]+)</',html)
   if key:
    value=key[1];mask(value);private(secret/(self.role+'_mfa_secret'),value);form['Code']=totp(value);mask(form['Code'])
   else:form['RecoveryCode']=take(factors/(self.role+'.codes'))
