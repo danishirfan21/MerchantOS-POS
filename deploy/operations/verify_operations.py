@@ -46,8 +46,8 @@ os.execvpe('docker',command,env)
 os.environ['PATH']=str(tools)+os.pathsep+os.environ['PATH'];os.environ['PGCONNECT_TIMEOUT']='2'
 secrets_path=private/'roles';secrets_path.mkdir(mode=0o700)
 passwords={}
-for name in ['pos','admin','backup','export','monitor']:
- value=secret();passwords[name]=value;atomic_json(private/(name+'-secret.json'),{'unused':True});path=secrets_path/({'pos':'pos_db_password','admin':'admin_db_password','backup':'backup_db_password','export':'export_db_password','monitor':'monitor_db_password'}[name]);path.write_text(value);path.chmod(0o600)
+for name in ['pos','admin','backup','export','monitor','operator','audit_read']:
+ value=secret();passwords[name]=value;atomic_json(private/(name+'-secret.json'),{'unused':True});path=secrets_path/({'pos':'pos_db_password','admin':'admin_db_password','backup':'backup_db_password','export':'export_db_password','monitor':'monitor_db_password','operator':'operator_db_password','audit_read':'audit_read_db_password'}[name]);path.write_text(value);path.chmod(0o600)
 env={**os.environ,'MERCHANT_SECRETS':str(secrets_path),'PGHOST':'127.0.0.1','PGPORT':'5433','PGUSER':'merchantos','PGDATABASE':'merchantos'}
 subprocess.run(['python3',str(root/'deploy/roles.py')],env=env,check=True,capture_output=True)
 export_config=private/'export.json';atomic_json(export_config,{'dsn':psycopg.conninfo.make_conninfo(host='127.0.0.1',port=5433,dbname='merchantos',user='merchant_security_exporter',password=passwords['export'])})
@@ -70,6 +70,7 @@ try:
  response=subprocess.run([sys.executable,str(root/'deploy/operations/audit.py'),'export','--database',str(export_config),'--storage',storage],capture_output=True,text=True);check(response.returncode==0 and json.loads(response.stdout)['exported']==0,'Exporter restart retains cursor')
  witness_key=private/'witness.key';witness_cert=private/'witness.crt';subprocess.run(['openssl','req','-x509','-newkey','rsa:2048','-nodes','-keyout',str(witness_key),'-out',str(witness_cert),'-days','2','-subj','/CN=Independent CI Witness'],check=True,capture_output=True)
  anchor=private/'checkpoint.json';checkpoint(storage,second['headKey'],second['headHash'],anchor,str(witness_cert),str(witness_key));check(verify_checkpoint(storage,anchor,str(witness_cert))['events']==chain['events'],'Independent signed checkpoint verifies retained chain')
+ expect_failure(lambda:verify_chain(store,first['headKey'],first['headHash'],json.loads(anchor.read_text())),'Rollback to an earlier valid batch rejected by independent checkpoint')
  bad_anchor=private/'modified-checkpoint.json';atomic_json(bad_anchor,{**json.loads(anchor.read_text()),'events':0});shutil.copyfile(anchor.with_suffix('.p7s'),bad_anchor.with_suffix('.p7s'));expect_failure(lambda:verify_checkpoint(storage,bad_anchor,str(witness_cert)),'Modified checkpoint fails pinned-certificate signature')
  # Without changing the independent anchor, malicious new object versions cannot replace history.
  original=store.get(first['headKey']);client=store.client
@@ -88,9 +89,12 @@ try:
  started=time.monotonic();backup=backup_run(config);timings.update(backupSeconds=backup['backupSeconds'],uploadSeconds=backup['uploadSeconds']);check(backup['status']=='success','Scheduled backup cycle uploads and verifies encrypted data')
  with (state/'backup.lock').open('a') as lock:
   fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB);check(backup_run(config)['overlapPrevented'],'Actual file lock prevents concurrent backup');fcntl.flock(lock,fcntl.LOCK_UN)
- receipt=state/'latest-backup-receipt.json';download=private/'recovered';check(retrieve(backup_storage,receipt,download)['retrievedObjects']==2,'Retrieve exact encrypted backup versions')
+ receipt=state/'latest-backup-receipt.json'
+ from witness import backup_checkpoint
+ backup_checkpoint(backup_storage,receipt,str(witness_cert),str(witness_key))
+ download=private/'recovered';check(retrieve(backup_storage,receipt,download,str(witness_cert))['retrievedObjects']==2,'Retrieve exact encrypted backup versions')
  for obj in json.loads(receipt.read_text())['objects'].values():check(not Store(backup_storage).get(obj['key'],obj['versionId']).startswith(b'PGDMP'),'No plaintext dump sent to storage')
- altered=json.loads(receipt.read_text());next(iter(altered['objects'].values()))['sha256']='0'*64;atomic_json(private/'corrupt-receipt.json',altered);expect_failure(lambda:retrieve(backup_storage,private/'corrupt-receipt.json',private/'corrupt-output'),'Corrupt backup receipt rejected')
+ altered=json.loads(receipt.read_text());next(iter(altered['objects'].values()))['sha256']='0'*64;atomic_json(private/'corrupt-receipt.json',altered);shutil.copyfile(receipt.with_suffix('.p7s'),(private/'corrupt-receipt.json').with_suffix('.p7s'));expect_failure(lambda:retrieve(backup_storage,private/'corrupt-receipt.json',private/'corrupt-output',str(witness_cert)),'Corrupt backup receipt rejected')
  encrypted=next(download.glob('*.dump.cms'));missing=subprocess.run(['openssl','cms','-decrypt','-binary','-inform','DER','-in',str(encrypted),'-inkey',str(private/'missing.key'),'-out','/dev/null'],capture_output=True);check(missing.returncode!=0,'Missing recovery private key fails closed')
  bad_config=read_config_for_test=json.loads(config.read_text());bad_config=copy.deepcopy(bad_config);bad_config['databaseEnvironment']['PGUSER']='missing-account';atomic_json(private/'bad-backup.json',bad_config);expect_failure(lambda:backup_run(private/'bad-backup.json'),'Failed backup is detected');check(json.loads((state/'backup-status.json').read_text())['status']=='failed','Backup failure state observable')
  # Preserve real table contents and enforce post-restore quarantine in a fresh database.
@@ -100,11 +104,11 @@ try:
  check(db('SELECT count(*) AS n FROM auth_users WHERE mfa_enabled')[0]['n']>0,'Recovery fixture contains native enrolled MFA identities')
  baseline=snapshot(owner);target='merchant_restore_m9_'+uuid.uuid4().hex[:8];restore_start=time.monotonic()
  restore_env={**os.environ,'PGHOST':'127.0.0.1','PGPORT':'5433','PGUSER':'merchantos','PGDATABASE':'merchantos'};restore_env.pop('PGPASSFILE',None)
- restored=subprocess.run([sys.executable,str(root/'deploy/restore.py'),str(encrypted),'--private-key',str(recovery_key),'--target',target,'--confirm-isolated'],env=restore_env,capture_output=True,text=True);check(restored.returncode==0,'Actual encrypted restore/migration succeeds');timings['restoreSeconds']=round(time.monotonic()-restore_start,3)
+ restored=subprocess.run([sys.executable,str(root/'deploy/restore.py'),str(encrypted),'--private-key',str(recovery_key),'--target',target,'--confirm-isolated'],env=restore_env,capture_output=True,text=True);check(restored.returncode==0,'Actual encrypted restore/migration succeeds: '+restored.stderr[-500:]+restored.stdout[-500:]);timings['restoreSeconds']=round(time.monotonic()-restore_start,3)
  restored_dsn=psycopg.conninfo.make_conninfo(owner,dbname=target);check(snapshot(restored_dsn)==baseline,'Restored business/identity/MFA/audit records match deterministic hashes')
  with psycopg.connect(restored_dsn) as c:check(c.execute('SELECT (SELECT count(*) FROM auth_restore_blocks)=(SELECT count(*) FROM auth_users)').fetchone()[0],'Every restored identity remains quarantined')
  # Least-privilege roles are exercised, not inferred from configuration text.
- for role,statement in [('merchant_pos','DELETE FROM security_events'),('merchant_pos','DELETE FROM auth_restore_blocks'),('merchant_admin_session','SELECT * FROM security_event_outbox'),('merchant_security_exporter','DELETE FROM security_event_outbox'),('merchant_monitor','SELECT password_hash FROM auth_users'),('merchant_backup','UPDATE auth_users SET enabled=true')]:
+ for role,statement in [('merchant_pos','UPDATE auth_users SET mfa_enabled=false,mfa_secret=NULL WHERE mfa_enabled'),('merchant_pos','UPDATE auth_users SET enabled=false'),('merchant_pos','DELETE FROM security_events'),('merchant_pos','DELETE FROM auth_restore_blocks'),('merchant_admin_session','SELECT * FROM security_event_outbox'),('merchant_security_exporter','DELETE FROM security_event_outbox'),('merchant_monitor','SELECT password_hash FROM auth_users'),('merchant_backup','UPDATE auth_users SET enabled=true')]:
   def forbidden():
    with psycopg.connect(owner) as c:c.execute(sql.SQL('SET ROLE {}').format(sql.Identifier(role)));c.execute(statement)
   expect_failure(forbidden,'Unauthorized operational DB action denied')

@@ -9,7 +9,8 @@ subprocess.run(['python3',str(root/'deploy/init-local.py'),'--output',str(work)]
 sys.path.insert(0,str(root/'scripts'))
 from mfa_fixture import totp,take
 factors=work/'factors';factors.mkdir(mode=0o700)
-def private(path,value):path.write_text(value);path.chmod(0o600)
+def private(path,value):
+ path.write_bytes(value) if isinstance(value,bytes) else path.write_text(value);path.chmod(0o600)
 def mask(value):
  print('::add-mask::'+value,flush=True)
  with open(os.environ['GITHUB_ENV'],'a') as f:f.write('STAGING_'+uuid.uuid4().hex+('_MFA_CODE' if len(value)==6 else '_MFA_SECRET')+'='+value+'\n')
@@ -92,11 +93,11 @@ class Client:
   check(self.mvc('/Admin/Orders')[0]==200);check(b'Sign In' not in self.mvc('/Admin/Orders')[1]);return self
  def mvc(self,path):return probe(path,admin=True,client=self.http)
 def operator(op,role='admin',targetrole=None):
- args=['run','--rm','--no-deps','-v',str(secret)+':/operator:ro','-v',str(factors)+':/factors','-e','Operations__AllowAccountCommand=true','-e','Account__Operation='+op,'-e','Account__UsernameFile=/operator/'+role+'_username']
- if op in ['create','password','recover','restore-recover']:args+=['-e','Account__PasswordFile=/operator/'+role+'_password']
+ args=['run','--rm','--no-deps','-v',str(secret/'operator_connection')+':/operator/connection:ro','-v',str(secret/(role+'_username'))+':/operator/username:ro','-v',str(factors)+':/factors','-e','ConnectionStrings__MerchantDbFile=/operator/connection','-e','Operations__AllowAccountCommand=true','-e','Account__Operation='+op,'-e','Account__UsernameFile=/operator/username']
+ if op in ['create','password','recover','restore-recover']:args+=['-v',str(secret/(role+'_password'))+':/operator/password:ro','-e','Account__PasswordFile=/operator/password']
  if op in ['password','recover','restore-recover']:args+=['-e','Operations__AllowRecovery=true','-e','Operations__OperatorCase='+str(uuid.uuid4())]
- if op=='restore-recover':args+=['-e','Operations__AllowMfaReset=true','-e','Operations__AllowRestoreRelease=true','-e','ConnectionStrings__MerchantDbFile=/operator/owner_connection']
- if op=='mfa-seed':args+=['-e','Operations__AllowMfaEnrollment=true','-e','Account__MfaSecretFile=/operator/'+role+'_mfa_secret','-e','Account__CodeFile=/operator/'+role+'_mfa_code','-e','Account__RecoveryFile=/factors/'+role+'.codes','-e','Account__RecoveryCount=100']
+ if op=='restore-recover':args+=['-e','Operations__AllowMfaReset=true','-e','Operations__AllowRestoreRelease=true']
+ if op=='mfa-seed':args+=['-v',str(secret/(role+'_mfa_secret'))+':/operator/mfa_secret:ro','-v',str(secret/(role+'_mfa_code'))+':/operator/mfa_code:ro','-e','Operations__AllowMfaEnrollment=true','-e','Account__MfaSecretFile=/operator/mfa_secret','-e','Account__CodeFile=/operator/mfa_code','-e','Account__RecoveryFile=/factors/'+role+'.codes','-e','Account__RecoveryCount=100']
  if targetrole:args+=['-e','Account__Role='+targetrole]
  return run(*args,'pos-api','--account')
 def seed_mfa(role):
@@ -194,8 +195,13 @@ try:
   active=pool.submit(cashier.call,'/api/checkout',checkout);run('kill','-s','SIGKILL','pos-api');result=active.result();check(result[0] in [0,200,502,503])
  run('up','-d','pos-api');wait_ready();replay=cashier.call('/api/checkout',checkout);check(replay[0]==200);check(managed()['stock']==prior-1);check(cashier.call('/api/checkout',checkout)[1]['id']==replay[1]['id'])
  # DB loss: liveness persists, readiness fails, safe errors omit credentials and recover without login loss.
+ sys.path.insert(0,str(root/'deploy/operations'))
+ from staging_monitor import StagingMonitor
+ monitor_drill=StagingMonitor(root,work,run,evidence);healthy_signals=monitor_drill.poll(0);check(healthy_signals['database_unavailable']==0);check(healthy_signals['pos_unavailable']==0);check(healthy_signals['admin_unavailable']==0)
  run('stop','db');check(probe('/api/health/live')[0]==200);check(probe('/health/live',admin=True)[0]==200);check(probe('/api/health/ready')[0]==503);check(probe('/health/ready',admin=True)[0]==503)
+ down_signals=monitor_drill.poll(60);down_signals=monitor_drill.poll(180);check(down_signals['database_unavailable']==1);check(down_signals['pos_unavailable']==1);check(down_signals['admin_unavailable']==1);check(any(x['alert']=='DatabaseUnavailable' and x['state']=='firing' for x in monitor_drill.fixture.received.values()))
  failure=mvc.mvc('/Admin/Orders');check(failure[0] in [500,503]);check(b'Password=' not in failure[1]);run('start','db');wait_ready();check(mvc.mvc('/Admin/Orders')[0]==200)
+ healthy_signals=monitor_drill.poll(240);check(healthy_signals['database_unavailable']==0);check(any(x['alert']=='DatabaseUnavailable' and x['state']=='resolved' for x in monitor_drill.fixture.received.values()));(evidence/'alert-drill-results.json').write_text(json.dumps({'result':'passed','actualReadinessDatabaseOutage':True,'tlsTestReceiverDelivery':True,'databaseAlertResolved':True,'liveOperatorRouting':'unverified'},indent=2));monitor_drill.close()
  recovered=cashier.idempotent('/api/checkout',checkout);assert recovered[0]==200,'Checkout recovery status '+str(recovered[0]);check(recovered[1]['id']==replay[1]['id']);recovered_adjustment=admin.idempotent('/api/admin/inventory/p17/adjustments',adjustment);assert recovered_adjustment[0]==200,'Stock recovery status '+str(recovered_adjustment[0]);check(recovered_adjustment[1]['newQuantity']==before+5)
  # Migration replay and concurrent runners retain all business/auth/audit data.
  before_restore=snapshot()
@@ -218,7 +224,7 @@ try:
  # Encrypt key archive before storing; offline backup private key is not mounted by the backup service.
  subprocess.run(['openssl','cms','-encrypt','-binary','-aes-256-cbc','-in',str(keybackup),'-outform','DER','-out',str(work/'protected-keys.cms'),str(secret/'backup_cert.pem')],check=True);keybackup.unlink()
  run('stop','pos-api','admin')
- for name in ['pos_connection','admin_connection','owner_connection']:
+ for name in ['pos_connection','admin_connection','owner_connection','operator_connection']:
   path=secret/name;path.write_text(path.read_text().replace('Database=merchantos;','Database=merchant_restore_drill;'))
  run('run','--rm','--no-deps','-e','PGDATABASE=merchant_restore_drill','migrate','/ops/roles.py')
  # Decrypt/restore the protected key directory separately and restart the consumers.
@@ -286,6 +292,87 @@ try:
  anon=Client('admin');anon.csrf();statuses=[]
  for i in range(65):statuses.append(probe('/api/auth/login',{'username':'nonexistent','password':'invalid'},client=anon.http,headers={'X-CSRF-TOKEN':anon.token,'X-Forwarded-For':'203.0.113.'+str(i%255)})[0])
  check(429 in statuses)
+ # M9: lose the entire first application environment; retain only independent fixture storage/custody.
+ sys.path.insert(0,str(root/'deploy/operations'))
+ from fixture import Fixture
+ from storage import Store
+ from witness import backup_checkpoint,verify as verify_witness
+ from common import atomic_json,digest,iso
+ controller=pathlib.Path(tempfile.mkdtemp(prefix='merchantos-independent-controller-'));controller.chmod(0o700)
+ remote=Fixture(controller/'s3-endpoint');remote_config=remote.configuration('disaster-recovery');remote.initialize(remote_config);remote_store=Store(remote_config)
+ try:
+  dr_timings={};started=time.monotonic();source_data=snapshot('merchant_restore_drill');source_security_count=int(sql('SELECT count(*) FROM security_events','merchant_restore_drill'))
+  run('run','--rm','--no-deps','-e','PGDATABASE=merchant_restore_drill','backup');latest=sorted((work/'backups').glob('*.dump.cms'))[-1];dr_timings['backupSeconds']=round(time.monotonic()-started,3)
+  # Wrap protected key XML AND its wrapping dependencies in a streaming CMS envelope.
+  bundle=controller/'protected-dependencies.cms'
+  encrypt=subprocess.Popen(['openssl','cms','-encrypt','-binary','-aes-256-cbc','-outform','DER','-out',str(bundle),str(secret/'backup_cert.pem')],stdin=subprocess.PIPE,stderr=subprocess.DEVNULL)
+  with tarfile.open(fileobj=encrypt.stdin,mode='w|') as archive:
+   for directory in ['pos-keys','admin-keys']:
+    for file in (work/directory).glob('*.xml'):archive.add(file,arcname=directory+'/'+file.name)
+   archive.add(secret/'dp.pfx',arcname='recovered-material/dp.pfx');archive.add(secret/'dp_password',arcname='recovered-material/dp_password')
+  encrypt.stdin.close();check(encrypt.wait(timeout=30)==0)
+  uploaded=time.monotonic();objects={}
+  for file in [latest,latest.with_suffix('.json'),bundle]:objects[file.name]=remote_store.put_file('recovery/'+latest.name+'/'+file.name,file)
+  dr_timings['uploadSeconds']=round(time.monotonic()-uploaded,3);receipt=controller/'approved-recovery-receipt.json';atomic_json(receipt,{'objects':objects,'approvedBy':'isolated CI witness; no human approval claimed','verifiedUtc':iso()})
+  witness_cert=controller/'witness.crt';witness_key=controller/'witness.key';subprocess.run(['openssl','req','-x509','-newkey','rsa:2048','-nodes','-keyout',str(witness_key),'-out',str(witness_cert),'-days','2','-subj','/CN=Independent DR Fixture Witness'],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);backup_checkpoint(remote_config,receipt,witness_cert,witness_key)
+  old_browser_cookies=[copy.copy(cookie) for cookie in mvc.jar];old_backend_cookies=[copy.copy(cookie) for cookie in admin.jar]
+  # Move, do not duplicate, the private recovery key into the fixture custodian interface.
+  custodian_key=controller/'custodian-backup.key';(work/'recovery-material/backup_key.pem').rename(custodian_key)
+  lost_work=work;fresh=work.parent/(work.name+'-fresh-host');loss_started=time.monotonic();run('down','--volumes','--remove-orphans');shutil.rmtree(lost_work)
+  subprocess.run(['python3',str(root/'deploy/init-local.py'),'--output',str(fresh)],check=True)
+  work=fresh;secret=work/'secrets';factors=work/'factors';factors.mkdir(mode=0o700);project=project+'_recovered'
+  env={**env,'STAGING_DIR':str(work),'COMPOSE_PROJECT_NAME':project,'BACKUP_PRIVATE_KEY_FILE':str(custodian_key)};base=['docker','compose','--env-file',str(work/'staging.env'),'-f',str(root/'deploy/compose.yml')]
+  retrieved=time.monotonic();verify_witness(receipt,witness_cert)
+  for name,obj in json.loads(receipt.read_text())['objects'].items():
+   remote_store.download(obj['key'],obj['versionId'],work/'backups'/name,obj['sha256']);check((work/'backups'/name).is_file())
+  dr_timings['downloadSeconds']=round(time.monotonic()-retrieved,3)
+  # Missing private material is a hard failure, before any database creation.
+  decrypt=subprocess.Popen(['openssl','cms','-decrypt','-binary','-inform','DER','-in',str(work/'backups'/bundle.name),'-inkey',str(custodian_key)],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
+  for directory in ['pos-keys','admin-keys']:shutil.rmtree(work/directory);(work/directory).mkdir(mode=0o700)
+  with tarfile.open(fileobj=decrypt.stdout,mode='r|') as archive:
+   for member in archive:
+    check(member.isfile() and (re.fullmatch(r'(pos-keys|admin-keys)/key-[0-9a-f-]+\.xml',member.name) is not None or member.name in ['recovered-material/dp.pfx','recovered-material/dp_password']))
+    archive.extract(member,work,filter='data');(work/member.name).chmod(0o600)
+  check(decrypt.wait(timeout=30)==0)
+  for name in ['dp.pfx','dp_password']:(work/'recovered-material'/name).replace(secret/name)
+  (work/'recovered-material').rmdir()
+  for directory in ['pos-keys','admin-keys']:(work/directory).chmod(0o700)
+  run('build');run('up','-d','db')
+  missing=run('run','--rm','--no-deps','restore','/ops/restore.py','/backups/'+latest.name,'--target','merchant_restore_missing_key','--confirm-isolated','--private-key','/missing.key',ok=False);check(missing.returncode!=0)
+  check(sql("SELECT count(*) FROM pg_database WHERE datname='merchant_restore_missing_key'")=='0')
+  restore_started=time.monotonic()
+  run('run','--rm','--no-deps','restore','/ops/restore.py','/backups/'+latest.name,'--target','merchant_restore_full_dr','--confirm-isolated');dr_timings['restoreSeconds']=round(time.monotonic()-restore_started,3)
+  # Fresh DB before reconciliation preserves all original record bytes except added quarantine/event rows.
+  recovered_data=snapshot('merchant_restore_full_dr')
+  for table,value in source_data.items():
+   if table not in ['security_events','auth_restore_blocks']:check(recovered_data[table]==value)
+  check(int(sql('SELECT count(*) FROM security_events','merchant_restore_full_dr'))==source_security_count+1)
+  check(sql('SELECT count(*) FROM auth_restore_blocks','merchant_restore_full_dr')==sql('SELECT count(*) FROM auth_users','merchant_restore_full_dr'))
+  for name in ['pos_connection','admin_connection','owner_connection','operator_connection']:
+   path=secret/name;path.write_text(path.read_text().replace('Database=merchantos;','Database=merchant_restore_full_dr;'))
+  run('run','--rm','--no-deps','-e','PGDATABASE=merchant_restore_full_dr','migrate','/ops/roles.py')
+  ctx=ssl.create_default_context(cafile=str(secret/'ca.crt'));startup=time.monotonic();run('up','-d','pos-api','admin','web');wait_ready();dr_timings['applicationStartupSeconds']=round(time.monotonic()-startup,3)
+  stolen_browser=Client('admin');stolen_backend=Client('admin')
+  for cookie in old_browser_cookies:stolen_browser.jar.set_cookie(cookie)
+  for cookie in old_backend_cookies:stolen_backend.jar.set_cookie(cookie)
+  check(b'Sign In' in stolen_browser.mvc('/Admin/Orders')[1]);check(stolen_backend.call('/api/auth/me')[0]==401)
+  reconcile=time.monotonic();temp={}
+  for role in ['admin','cashier']:
+   temp[role]=(secret/(role+'_password')).read_text();operator('restore-recover',role);replacement=secrets.token_urlsafe(32);mask(replacement);private(secret/(role+'_password'),replacement)
+  seed_mfa('admin');admin=Client('admin').login(temp['admin']);cashier=Client('cashier').login(temp['cashier']);mvc=Client('admin').mvc_login();dr_timings['identityReconciliationSeconds']=round(time.monotonic()-reconcile,3)
+  check(admin.call('/api/admin/reports/sales')[0]==200);check(admin.call('/api/admin/reports/orders.csv')[0]==200);check(cashier.call('/api/orders/'+order)[0]==200);check(mvc.mvc('/Admin/Orders')[0]==200)
+  check(stolen_backend.call('/api/auth/me')[0]==401);check(b'Sign In' in stolen_browser.mvc('/Admin/Orders')[1]);check(sql("SELECT enabled FROM auth_users WHERE username='staging-other'",'merchant_restore_full_dr')=='f')
+  for table in ['products','inventory_levels','orders','order_items','payments','checkout_idempotency','admin_audit','inventory_adjustments']:check(snapshot('merchant_restore_full_dr')[table]==source_data[table])
+  for service in ['pos-api','admin']:
+   check(probe('/api/ops/monitor' if service=='pos-api' else '/ops/monitor',admin=service=='admin')[0]==401)
+   s,b,_=probe('/api/ops/monitor' if service=='pos-api' else '/ops/monitor',admin=service=='admin',headers={'Authorization':'Bearer '+(secret/'monitor_token').read_text()});check(s==200 and 'requestsByStatus' in json.loads(b))
+  images=['api='+project+'-pos-api','admin='+project+'-admin','web='+project+'-web','db='+project+'-db','ops='+project+'-ops'];scan=['python3',str(root/'deploy/security-review.py'),'--images-only','--output',str(evidence/'security-dr')]
+  for image in images:scan+=['--image',image]
+  subprocess.run(scan,check=True);subprocess.run(['python3',str(root/'deploy/security-gate.py'),'--evidence',str(evidence/'security-dr')],check=True)
+  dr_timings['fullEnvironmentRecoverySeconds']=round(time.monotonic()-loss_started,3)
+  (evidence/'disaster-recovery-results.json').write_text(json.dumps({'result':'passed','timings':dr_timings,'verifiedUtc':iso(),'sourceEnvironmentDestroyed':True,'freshPostgresVolume':True,'storageProtocol':'TLS S3 fixture','actualOffHostDurability':'unverified','custody':'isolated test controller only; real custodians unassigned','proposedRpoHours':24,'proposedRtoMinutes':60,'productionRpoRtoGuaranteed':False},indent=2))
+ finally:remote.close()
+
  (evidence/'staging-results.json').write_text(json.dumps({'checks':checks,'result':'passed','capacity':timings,'scope':'isolated single-instance HTTPS Compose; not a production SLA','restoredTables':list(before_restore)},indent=2))
  print(f'Staging operational drill passed: {checks} assertions; real TLS, durable sessions, restarts, outage, exact-once retries, migration concurrency and encrypted restore.')
 finally:

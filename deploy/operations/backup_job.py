@@ -3,15 +3,16 @@ import argparse,fcntl,json,os,pathlib,subprocess,sys,tarfile,tempfile,time
 from common import atomic_json,digest,iso,now,read_config
 from storage import Store
 
-def retrieve(storage_path,receipt_path,output):
+def retrieve(storage_path,receipt_path,output,witness_certificate=None):
+ if not witness_certificate:raise ValueError("Pinned independent witness certificate required before recovery")
+ from witness import verify
+ verify(receipt_path,witness_certificate)
  store=Store(storage_path);receipt=json.loads(pathlib.Path(receipt_path).read_text());output=pathlib.Path(output)
  if output.exists():raise ValueError('Recovery output must be a fresh directory')
  output.mkdir(mode=0o700,parents=True)
  for name,obj in receipt['objects'].items():
   if pathlib.Path(name).name!=name:raise ValueError('Invalid recovery filename')
-  data=store.get(obj['key'],obj['versionId'])
-  if digest(data)!=obj['sha256']:raise ValueError('Encrypted backup integrity check failed')
-  file=output/name;file.write_bytes(data);file.chmod(0o600)
+  store.download(obj['key'],obj['versionId'],output/name,obj['sha256'])
  return {'retrievedObjects':len(receipt['objects']),'verifiedUtc':iso()}
 
 def run(config_path):
@@ -44,7 +45,7 @@ def run(config_path):
         tar.add(file,arcname=role+'/'+file.name)
      encrypted=spool/(backup.name+'.keys.cms');subprocess.run(['openssl','cms','-encrypt','-binary','-aes-256-cbc','-in',str(archive),'-outform','DER','-out',str(encrypted),config['encryptionCertificate']],check=True,capture_output=True,timeout=60);files.append(encrypted)
    upload_started=time.monotonic();store=Store(config['storageConfiguration']);objects={}
-   for file in files:objects[file.name]=store.put('backups/'+backup.name+'/'+file.name,file.read_bytes())
+   for file in files:objects[file.name]=store.put_file('backups/'+backup.name+'/'+file.name,file)
    receipt={'schema':1,'createdUtc':iso(),'objects':objects,'retention':store.policy(),'restoreVerified':False}
    receipt_data=__import__('common').canonical(receipt);receipt_object=store.put('receipts/'+backup.name+'.json',receipt_data)
    atomic_json(state/'latest-backup-receipt.json',receipt)
@@ -56,6 +57,6 @@ def run(config_path):
    raise RuntimeError('Backup cycle failed; inspect private operator configuration; no credentials logged') from None
 
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('action',choices=['run','retrieve']);p.add_argument('--config');p.add_argument('--storage');p.add_argument('--receipt');p.add_argument('--output');a=p.parse_args()
- try:print(json.dumps(run(a.config) if a.action=='run' else retrieve(a.storage,a.receipt,a.output)))
+ p=argparse.ArgumentParser();p.add_argument('action',choices=['run','retrieve']);p.add_argument('--config');p.add_argument('--storage');p.add_argument('--receipt');p.add_argument('--output');p.add_argument('--witness-certificate');a=p.parse_args()
+ try:print(json.dumps(run(a.config) if a.action=='run' else retrieve(a.storage,a.receipt,a.output,a.witness_certificate)))
  except Exception as error:raise SystemExit('Backup operation failed: '+type(error).__name__+'; private details omitted')

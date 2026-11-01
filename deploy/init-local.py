@@ -4,7 +4,7 @@ p=argparse.ArgumentParser();p.add_argument('--output',required=True);a=p.parse_a
 if out.exists() and any(out.iterdir()):raise SystemExit('Refusing to overwrite existing staging material.')
 os.umask(0o077);out.mkdir(parents=True,exist_ok=True);s=out/'secrets';s.mkdir();recovery=out/'recovery-material';recovery.mkdir(mode=0o700);uid=os.getuid() or 1654
 for name in ['pos-keys','admin-keys','backups']:(out/name).mkdir(mode=0o700)
-values={name:secrets.token_urlsafe(36) for name in ['db_password','pos_db_password','admin_db_password','pfx_password','dp_password','admin_password','cashier_password','other_password','backup_db_password','export_db_password','monitor_db_password','monitor_token']}
+values={name:secrets.token_urlsafe(36) for name in ['db_password','pos_db_password','admin_db_password','pfx_password','dp_password','admin_password','cashier_password','other_password','backup_db_password','export_db_password','monitor_db_password','monitor_token','operator_db_password','audit_read_db_password']}
 for name,value in values.items():(s/name).write_text(value)
 for name,value in [('admin_username','staging-admin'),('cashier_username','staging-cashier'),('other_username','staging-other')]:(s/name).write_text(value)
 def run(*args):subprocess.run(['openssl',*map(str,args)],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
@@ -17,7 +17,7 @@ run('req','-x509','-newkey','rsa:3072','-nodes','-keyout',s/'dp.key','-out',s/'d
 run('pkcs12','-export','-in',s/'dp.crt','-inkey',s/'dp.key','-out',s/'dp.pfx','-passout','file:'+str(s/'dp_password'))
 run('req','-x509','-newkey','rsa:3072','-nodes','-keyout',recovery/'backup_key.pem','-out',s/'backup_cert.pem','-days','365','-subj','/CN=MerchantOS Offline Backup Recovery')
 # DB connections are mounted as files, never Compose environment values or Docker build args.
-for name,user,password in [('pos_connection','merchant_pos','pos_db_password'),('admin_connection','merchant_admin_session','admin_db_password')]:
+for name,user,password in [('pos_connection','merchant_pos','pos_db_password'),('admin_connection','merchant_admin_session','admin_db_password'),('operator_connection','merchant_identity_operator','operator_db_password')]:
  (s/name).write_text('Host=db;Database=merchantos;Username='+user+';Password='+values[password]+';Timeout=3;Command Timeout=10')
 (s/'owner_connection').write_text('Host=db;Database=merchantos;Username=merchantos;Password='+values['db_password']+';Timeout=3;Command Timeout=10')
 (s/'backup_pgpass').write_text('db:5432:*:merchant_backup:'+values['backup_db_password']+'\n')

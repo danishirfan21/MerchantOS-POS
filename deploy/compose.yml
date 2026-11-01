@@ -65,6 +65,8 @@ services:
       - ${STAGING_DIR}/secrets/backup_db_password:/run/secrets/backup_db_password:ro
       - ${STAGING_DIR}/secrets/export_db_password:/run/secrets/export_db_password:ro
       - ${STAGING_DIR}/secrets/monitor_db_password:/run/secrets/monitor_db_password:ro
+      - ${STAGING_DIR}/secrets/operator_db_password:/run/secrets/operator_db_password:ro
+      - ${STAGING_DIR}/secrets/audit_read_db_password:/run/secrets/audit_read_db_password:ro
     depends_on: {db: {condition: service_healthy}}
     networks: [private]
     tmpfs: ['/tmp:mode=1777,size=128m']

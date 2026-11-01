@@ -29,4 +29,14 @@ CREATE OR REPLACE VIEW ops_security_signals AS SELECT
  (SELECT count(*) FROM security_events WHERE category='primary_authentication' AND outcome='failed' AND created_at>clock_timestamp()-interval '5 minutes') AS authentication_failures,
  (SELECT count(*) FROM auth_users WHERE greatest(locked_until,mfa_locked_until)>clock_timestamp()) AS locked_accounts,
  (SELECT count(*) FROM security_events WHERE category IN ('operator_recover','operator_password','operator_mfa_reset','operator_restore_recover','operator_role','operator_disable','operator_revoke') AND created_at>clock_timestamp()-interval '5 minutes') AS privileged_events;
+-- Runtime may enroll/verify factors but cannot perform privileged role/disable/MFA-reset transitions.
+CREATE OR REPLACE FUNCTION guard_runtime_identity_changes() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,public AS $$
+BEGIN
+ IF current_user='merchant_pos' AND (OLD.role IS DISTINCT FROM NEW.role OR OLD.enabled IS DISTINCT FROM NEW.enabled OR (OLD.mfa_enabled AND (NOT NEW.mfa_enabled OR OLD.mfa_secret IS DISTINCT FROM NEW.mfa_secret))) THEN
+  RAISE EXCEPTION 'Privileged identity operator role required' USING ERRCODE='42501';
+ END IF;
+ RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS guard_runtime_identity_update ON auth_users;
+CREATE TRIGGER guard_runtime_identity_update BEFORE UPDATE ON auth_users FOR EACH ROW EXECUTE FUNCTION guard_runtime_identity_changes();
 COMMIT;
