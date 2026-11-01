@@ -1,0 +1,15 @@
+**/bin
+**/obj
+node_modules
+.git
+.env*
+.staging
+**/*.pfx
+**/*key.pem
+test-results
+playwright-report
+
+**/*.key
+**/*.cms
+operational-evidence
+security-evidence

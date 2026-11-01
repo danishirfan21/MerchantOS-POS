@@ -1,6 +1,10 @@
-# Milestone 6 — historical reporting under review
+# Milestone 7 — isolated staging verified; PR unmerged
 
-Branch feature/historical-reporting-api; [PR #5](https://github.com/danishirfan21/MerchantOS-POS/pull/5) remains unmerged. Based on current verified main ad73c8e406fc1b42c8fdf4fd88b721d08f2ce320. Admin PR #7 pins the tested reporting revision.
+POS [PR #6](https://github.com/danishirfan21/MerchantOS-POS/pull/6), branch `feature/operational-hardening`. See [verified commits, CI and readiness matrix](docs/staging-readiness.md) and [setup/recovery runbook](docs/staging-operations.md). Staging GO is restricted to isolated single-instance demo data; public deployment remains blocked.
+
+## Milestone 6 — historical reporting merged (historical baseline)
+
+[PR #5](https://github.com/danishirfan21/MerchantOS-POS/pull/5) merged as `7adf607567666d2d9fbbe8549a3d56663263384e`. Based on current verified main ad73c8e406fc1b42c8fdf4fd88b721d08f2ce320. Admin PR #7 pins the tested reporting revision.
 
 Three read-only API routes provide SQL-filtered historical pages, one consistent sales analytics snapshot and bounded formula-safe CSV. Asia/Riyadh periods, financial formulas, offset consistency limitations, query/index behavior and export caps are documented in docs/reporting.md. No changes to checkout arithmetic, management locks, audit, identities, receipt access or Angular UI.
 
@@ -51,3 +55,8 @@ The approved Stitch screenshot file was not accessible in this workspace. Visual
 PR #1 was merged first using a regular merge commit. PR #2 was retargeted to `main`, then [retargeted PR run #40937260128](https://github.com/danishirfan21/MerchantOS-POS/actions/runs/40937260128) passed PostgreSQL/API checks, Angular build, 21/21 unit tests and 15/15 browser tests without retries. PR #2 was merged as `f579e11e8360e37b03f4c6a550328d9b1dfdbc94`. The final `main` workflow runs against the integrated commit, with results in GitHub Actions.
 
 The API is demo-only with required authentication and must not be exposed publicly. Simulated card processing stores no card details. No real gateway, refunds, multi-store management, hardware printing or advanced reporting. Product illustrations are stylized by category rather than exact manufacturer photography. Tablet and mobile screenshots are browser captures, not a claim of exact Stitch parity.
+
+
+## Milestone 7 — operational staging
+
+Implementation in new unmerged feature PRs. See [staging operations and incident runbook](docs/staging-operations.md) and [evidence/readiness matrix](docs/staging-readiness.md). Persistent protected keys, durable Admin tickets, strict local HTTPS Compose, safe migrations, encrypted backup/restore, health/readiness and correlation-safe logging are implemented. The real HTTPS Compose recovery drill passed 176 assertions; complete existing regression suites and credential audits pass. Remaining image findings and production blockers are recorded in the matrix. No public deployment or automatic merge.

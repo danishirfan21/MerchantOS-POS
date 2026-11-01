@@ -1,44 +1,14 @@
+# Local database-only helper. Full HTTPS stack: deploy/compose.yml.
 services:
   db:
-    image: postgres:17-alpine
+    image: postgres:17-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b
     environment:
       POSTGRES_DB: merchantos
       POSTGRES_USER: merchantos
-      POSTGRES_PASSWORD: merchantos_dev
-    ports:
-      - "127.0.0.1:5433:5432"
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
     volumes:
       - merchantos_postgres:/var/lib/postgresql/data
-      - ./db/init:/docker-entrypoint-initdb.d:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U merchantos -d merchantos"]
-      interval: 5s
-      timeout: 3s
-      retries: 15
-  migrate:
-    image: postgres:17-alpine
-    environment:
-      PGHOST: db
-      PGPORT: 5432
-      PGDATABASE: merchantos
-      PGUSER: merchantos
-      PGPASSWORD: merchantos_dev
-    volumes:
-      - ./db/migrations:/migrations:ro
-    command: ["sh", "-c", "psql -v ON_ERROR_STOP=1 -1 -f /migrations/003_checkout.sql"]
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: "no"
-  api:
-    build: ./services/merchant-api
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__MerchantDb: "Host=db;Port=5432;Database=merchantos;Username=merchantos;Password=merchantos_dev"
-    ports:
-      - "127.0.0.1:5080:8080"
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
+      - ${MERCHANT_DB_PASSWORD_FILE:?supply an absolute password-file path}:/run/secrets/db_password:ro
+    ports: ["127.0.0.1:5433:5432"]
 volumes:
   merchantos_postgres:

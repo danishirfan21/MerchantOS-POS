@@ -147,7 +147,7 @@ public sealed class DbSessionStore(NpgsqlDataSource db) : ITicketStore
 {
     public async Task<string> StoreAsync(AuthenticationTicket ticket) {
         var key = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-        await using var cmd = db.CreateCommand("DELETE FROM auth_sessions WHERE expires_at<=now(); INSERT INTO auth_sessions(id,user_id,expires_at) VALUES(@id,@user,@expiry)");
+        await using var cmd = db.CreateCommand("INSERT INTO auth_sessions(id,user_id,expires_at) VALUES(@id,@user,@expiry)");
         cmd.Parameters.AddWithValue("id", key); cmd.Parameters.AddWithValue("user", Guid.Parse(ticket.Principal.FindFirstValue(ClaimTypes.NameIdentifier)!));
         cmd.Parameters.AddWithValue("expiry", ticket.Properties.ExpiresUtc!.Value); await cmd.ExecuteNonQueryAsync(); return key;
     }
