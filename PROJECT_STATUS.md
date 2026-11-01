@@ -1,6 +1,6 @@
-# Milestone 8 — implementation and verification in progress
+# Milestone 8 — review candidate; unmerged
 
-See [MFA and recovery](docs/mfa-recovery.md). Mandatory backend MFA, restricted durable Admin challenges, enrollment/recovery/password UI, restore quarantine and vulnerability gates are implemented. Final-head browser and HTTPS staging checks are running; this milestone is not yet declared complete. Existing business behavior remains under regression verification.
+See [MFA and recovery](docs/mfa-recovery.md). Mandatory backend MFA, restricted durable Admin challenges, enrollment/recovery/password UI, restore quarantine and vulnerability gates are implemented. Executed verification includes 72 PostgreSQL identity assertions, 109 Admin browser cases and 283 HTTPS staging assertions. See [exact revisions, runs and readiness](docs/staging-readiness.md); final-head CI must pass before review readiness. Existing business calculations and transaction modules are preserved.
 
 # Milestone 7 — merged; historical isolated staging evidence
 

@@ -1,54 +1,38 @@
-> M8 readiness is pending final-head verification. The M7 evidence below is a historical baseline, not approval of the changed MFA/restore implementation. Public deployment remains blocked. See [MFA recovery controls](mfa-recovery.md).
+# Milestone 8 — review candidate, isolated staging evidence
 
-# Milestone 7 readiness evidence
+Both Milestone 7 PRs are merged. Milestone 8 remains unmerged and has no public deployment. Read [MFA/recovery and restore reconciliation](mfa-recovery.md), [threat model](identity-threat-model.md), [dependency review](dependency-review.md) and the [operations runbook](staging-operations.md).
 
-**GO for isolated, single-instance localhost staging using disposable demo data. Public production: BLOCKED.** No public deployment or merge was performed.
+## Executed evidence
 
-Verified runtime commits: POS `1238815f38e848716491dce0d9a3c6ae72e536bd`, Admin `ee653aa1faf81ba9d9621be67ca76733e609a9fa`. Admin CI pins that exact POS feature commit. Later documentation-only updates retain this runtime pin.
+- POS `a99238d330a63f17a4b79eadaa461f75a9520b35`: [integration 41295184232](https://github.com/danishirfan21/MerchantOS-POS/actions/runs/41295184232), 47 .NET, 72 real PostgreSQL identity assertions, 21 Angular, 24 browser, 383 reporting, 99 management and 40 direct security checks.
+- Admin `f108ebbae3d0acc341d2149bfa4cba61b67021cb`, pinned POS `a99238d330a63f17a4b79eadaa461f75a9520b35`: [integration 41295285449](https://github.com/danishirfan21/MerchantOS-Admin/actions/runs/41295285449), 68 Admin .NET, all 109 browser cases (94 retained +15 MFA), checkout/catalog, 383 reporting, 99 management and 40 security checks; credential audit passed.
+- Same Admin/POS pair: [real HTTPS recovery 41295285442](https://github.com/danishirfan21/MerchantOS-Admin/actions/runs/41295285442), [audited results and five-image scans](https://github.com/danishirfan21/MerchantOS-Admin/actions/runs/41295285442/artifacts/13077969702), **283 assertions passed**. Original M7 operational scenarios are retained; identity restore expectations are tightened to quarantine and explicit reconciliation. Copied pre-restore cookies also fail after reconciliation.
+- [Responsive MFA screenshots and full 109-case browser evidence](https://github.com/danishirfan21/MerchantOS-Admin/actions/runs/41295285449/artifacts/13079385271): desktop 1440×900, tablet 768×1024 and mobile 390×844. Enrollment QR/key region is masked. The empty-validation-summary refinement is included in these screenshots.
 
-- [POS regression CI](https://github.com/danishirfan21/MerchantOS-POS/actions/runs/41243400068)
-- [Admin regression CI](https://github.com/danishirfan21/MerchantOS-Admin/actions/runs/41243440542)
-- [Real HTTPS Compose recovery drill](https://github.com/danishirfan21/MerchantOS-Admin/actions/runs/41243440548), [audited results/logs](https://github.com/danishirfan21/MerchantOS-Admin/actions/runs/41243440548/artifacts/13058004439)
-- [POS package/image scan](https://github.com/danishirfan21/MerchantOS-POS/actions/runs/41243400011), [Admin package/image scan](https://github.com/danishirfan21/MerchantOS-Admin/actions/runs/41243440648)
+These links identify executed revisions, rather than implying every later commit has been tested. Before marking the PRs ready, all integration, security and staging checks must pass at their latest heads and Admin's exact POS pin must match the verified backend. Final-head links and commit SHAs belong in the PR descriptions.
 
-| Capability | Status | Executed evidence / boundary |
-|---|---|---|
-| Authentication and authorization | Verified | Native real-user suites retained; staging administrator/cashier boundaries, disabled users, expiry, password/session revocation and logout exercised. POS remains authoritative. |
-| HTTPS and proxy security | Verified | Real local-CA validation on edge and backend hops; secure cookie attributes, external-host redirects, direct untrusted forwarding rejection and spoofed-XFF throttling checked. |
-| Durable Admin sessions | Verified | PostgreSQL protected tickets survive Admin/API/proxy/DB/full-stack restarts and actual restored-database cutover. Per-reference cryptographic purpose rejects copied ticket ciphertext. Absolute expiry is unchanged. |
-| Key protection and recovery | Verified | Native certificate encryption, private mounts, encrypted XML assertions, rotation with old cookies, fail-closed missing configuration and protected-ring restore with explicit permissions. Wrapping certificate remains a separate offline recovery dependency. |
-| Secrets | Verified | Random file-mounted credentials; separate runtime DB roles; fail-closed artifact audits including outage logs. No dumps, cookies, private certificates or keys uploaded. Docker host remains trusted. |
-| Migration safety | Verified | Fresh installation, populated replay, concurrent advisory locking/checksums and failed-file atomic rollback; no reseeding/data loss. |
-| Backup/restore | Verified | Real encrypted custom dump restored into a new isolated DB; all fields compared across 11 business/auth/audit/idempotency tables. That M7 cookie behavior is superseded in M8: restored identities are quarantined, and old cookies remain invalid after explicit per-person reconciliation. Off-host disaster recovery remains operator work. |
-| Liveness/readiness | Verified | Separate process/dependency status; real DB outage gives live 200/ready 503; readiness and valid-session access recover. |
-| Logging/correlation | Verified | Safe structured app logs, normalized/forwarded correlation ID observed in both services, filtered proxy failure metadata and error-parameter suppression; upload audit passes. |
-| Operational metrics/monitoring | Partially verified | Administrator-protected process counters/duration and native Meter; safe per-route logs. No persistent collector, alert delivery or on-call ownership. |
-| Restart/failure recovery | Verified | All service and full-stack restarts, forced API kill during checkout, DB outage, bounded same-key retries and exact-once stock/order behavior. Expired-record cleanup also exercised. |
-| Dependencies/supply chain | Partially verified | Maintained action SHAs, digest-pinned bases, npm lockfile and complete npm/NuGet/Trivy reports. npm advisories fixed; remaining image findings documented in dependency-review.md. Green scan execution does not clear vulnerabilities. |
-| Functional/responsive regressions | Verified | 31 POS .NET, 21 Angular, 21 POS browser; 61 Admin .NET, 3 templates, 94 Admin browser; 383 reporting checks on 10,000 historical orders, 99 management, 40 security checks (all prior 39 retained). |
-| MFA and operator recovery | M8 implemented; final staging verification pending | Mandatory POS MFA, responsive enrollment/recovery/password forms, one-time factors and separately authorized operator commands; see mfa-recovery.md. |
-| Public production | Blocked | No public exposure authorized; remaining security/operations controls below are required. |
+| Area | Verified behavior / scope |
+|---|---|
+| Administrator authority | Password creates a restricted five-minute challenge; direct administrative APIs remain unauthorized until backend MFA succeeds. Legacy password-only Admin sessions fail closed. |
+| TOTP/enrollment | Otp.NET, RFC vectors, six ASCII digits, ±one 30-second step, encrypted per-user pending/active secrets, confirmation before activation, local QR, one-time display. |
+| Replay/concurrency | Actual PostgreSQL user/challenge locks, monotonically accepted TOTP step, concurrent factor/code redemption exactly once, challenge expiry/replay rejection. |
+| Recovery/passwords | One-time high-entropy hashed recovery verifiers, rotation invalidates old codes/sessions, current-password checks, recent backend MFA, forced temporary-password replacement, separate operator authorizations and case UUID. |
+| Atomic security events | Credential/factor changes and critical event writes share transactions; injected event failure rolls back factor consumption and session issuance. Safe fixed field contract; runtime roles cannot alter/delete events. |
+| Durable sessions and keys | Full and pending Admin tickets remain server-held and encrypted, POS authority revalidated; permitted restarts preserve absolute expiry. Key rotation and protected-ring recovery retain decryption dependencies. |
+| Restore | Current schema plus all restored identities quarantined. Original business/auth/audit snapshots compared before reconciliation; business hashes preserved afterwards. Old sessions/codes fail; disabled status stays disabled. Separate per-person owner reconciliation required. |
+| Operational regression | Original service/full-stack restarts, kill during checkout, DB outage/liveness/readiness, same-key exact-once checkout/inventory retries, migration concurrency and rollback, encrypted dump/key recovery, ciphertext swap, expiry, logout/stolen cookies, role/disable/password revocation, forwarded-header trust and throttling retained. |
+| Business/browser regression | Original Admin 94 cases retained; 15 real MFA scenarios added across three viewports. Reporting formulas, checkout arithmetic and inventory transaction modules unchanged. |
+| Container gate | Exact staging-built image IDs/layers scanned before application startup. Unsuppressed reports retained; separate high/critical gate with narrow expiring unfixed go-jose v3 exception. Nine policy regression tests. |
+| Artifact hygiene | No active QR screenshots, traces/storage state/recovery files/key archives/dumps uploaded. Known credentials/factors, cookie patterns, enrollment URIs and private material screened before upload. |
 
-The full staging drill passed **176 assertions** with real Docker/PostgreSQL/HTTPS on an isolated GitHub Actions Ubuntu runner. Docker was unavailable in the editing environment, so no local container execution is claimed. Four additional artifact-auditor tests exercise secret/key/dump rejection and embedded-report decoding. No existing meaningful assertion or authentication boundary was removed.
+## Readiness decision and production blockers
 
-## Small-fixture timing observations
+**GO only for isolated, disposable, single-instance HTTPS staging with the passing revision's exact images/configuration. Public production is BLOCKED.** A green collection job alone does not pass the security gate or approve deployment.
 
-The recovery artifact records three samples per read/edit operation and one checkout, under the Compose 512 MiB/one-CPU app limits. Median milliseconds: authentication 78.05, catalog 7.86, product edit 17.28, inventory adjustment 18.09, reporting 17.29, historical page 7.00, CSV 6.78; one checkout 31.62. This is a smoke timing observation, not sustained load capacity or a production SLA. The independent reporting regression uses 10,000 historical orders.
-
-## Corrected failures found during verification
-
-The unchanged management suite caught malformed requests becoming 500 instead of 400. Container runs caught malformed tmpfs syntax, Caddy executable capabilities conflicting with cap-drop, missing ingress reachability and an external-host redirect issue. Outage testing exposed stale pooled database connections; these now report safe 503 and bounded same-key replay succeeds. Proxy failure metadata was removed after the credential audit blocked it from upload. Restore testing retained the startup permission check and fixed archive-restored directory modes rather than bypassing it. A clock-dependent test fixture was aligned with the Saudi store date without changing financial/date formulas. Harness-only cookie attribute casing and cookie snapshot issues were fixed; the final complete run passed.
-
-## Public deployment blockers and limitations
-
-- M8 implements MFA and recovery; production operator access ownership, independent identity-verification procedure and approvals must still be assigned.
-- Single instance only. Fixed container names enforce the supported topology. Rate limits/metrics reset on app restart; no distributed rate state or distributed coordination is claimed.
-- TLS certificates are local, short-lived and manually renewed. No public domain, certificate automation or exposure approved.
-- Off-host backups, offline recovery-key custody, scheduled backup failure alerts and restore cadence require an assigned operator. No external monitoring destination or on-call ownership configured.
-- Dependency/image findings must be reviewed at the exact build and advisory date. No blanket vulnerability-free claim. Mutable APK repositories prevent byte-identical source rebuilds; retain reviewed built image digests.
-- Recovery point is last validated backup; no continuous WAL archival/HA/PITR. RTO is measured only by the disposable drill, not a production commitment.
-- Payments remain the existing simulated cash/card flow. Real payment processing/financial compliance is outside this milestone.
-- Security/account operator actions print completion but do not create an immutable external security audit trail; business audit history remains database-backed and unchanged.
-- Health endpoints check required objects/connectivity, not every schema permission or semantic invariant. Run the serialized deployment migrator before startup.
-
-- PostgreSQL transport relies on the isolated host/internal bridge; remote database/TLS deployment is not implemented.
+- One unfixed `github.com/go-jose/go-jose/v3` high finding remains, individually reviewed only for the pinned private Caddy surface until 2026-12-01; medium/low/unknown findings remain in reports. Apply a fix when available and refresh scans before any release.
+- Assign independent identity verification, operator authorization/approval ownership and recovery custody. Initial-enrollment credential theft remains a bootstrap risk. No anonymous/email password reset or phishing-resistant WebAuthn is implemented.
+- Database owner/host compromise can alter audit or identity authority. Off-host immutable security-event collection, alerting and on-call ownership are not implemented. Owner-only bounded 90-day retention requires an assigned schedule.
+- Assign offline key/certificate custody, off-host backups, backup-failure alerts and restore cadence. MFA decryption keys are long-lived dependencies; session expiry does not make old keys disposable.
+- Supported topology is one instance on one trusted host. Rate limits are process-local; multi-instance/distributed throttling, HA, PITR/WAL recovery and sustained load/SLA validation are outside scope.
+- PostgreSQL remains on the private host bridge; remote database transport/TLS and public ingress/certificate/operational threat review require separate work.
+- Session cookie theft remains relevant despite MFA. No real payment processing, refunds or cloud deployment is added.

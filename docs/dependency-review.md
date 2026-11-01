@@ -1,4 +1,4 @@
-# Dependency review — Milestone 7
+# Dependency review — Milestone 8 and historical baseline
 
 The `Container and dependency evidence` (POS) and `Admin container and dependency evidence` workflows build release images, run npm audit, NuGet transitive advisory queries and checksum-verified Trivy 0.76.1. JSON reports include every reported finding without ignore rules. Workflow success means evidence was collected, not that an image has no vulnerabilities. Re-run on the exact release SHA; advisory databases change independently of code.
 
@@ -18,7 +18,7 @@ Initial executed scans:
 
 Both apps retain existing password hashing, transaction arithmetic, authorization and reporting. Actions are pinned to verified maintained release commit SHAs: checkout 7.0.1, setup-node 7.1.0, setup-dotnet 6.0.0 and upload-artifact 7.0.2. Workflows grant contents:read only. No OIDC/cloud deployment permission. Runtime image bases are recorded by digest in `deploy/images.json` in POS. No downloaded installer is piped into a shell; the scanner archive checksum is checked before extraction.
 
-The trusted local staging scope uses generated disposable data. Public production remains blocked on unresolved image findings, MFA/recovery, assigned backup/key custody and alerting ownership. Do not reinterpret a green evidence job as permission to publish this stack or import real customer data.
+The trusted local staging scope uses generated disposable data. Public production remains blocked on unresolved image findings, assigned recovery/operator and backup/key custody and alerting ownership. Do not reinterpret a green evidence job as permission to publish this stack or import real customer data.
 
 ## Verified updated scans
 
@@ -56,4 +56,4 @@ Go build toolchain is `golang:1.27.3-alpine@sha256:d200d2dd76b03a99b52651fd1325a
 
 Remaining high finding: `CVE-2026-116587`, `github.com/go-jose/go-jose/v3` at `v3.0.5`, no fixed version reported. No JWT/JWK verification or automated issuer is configured in the reviewed Caddy configuration; local certificates and fixed HTTPS backends constrain reachability. This is a bounded reachability assessment, not proof that every linked dependency is unreachable. The owner-documented staging-only exception expires 2026-12-01 and fails when a fix becomes available, the configuration changes or a new high/critical appears. There is no broad ignore file. Public production remains blocked. Other medium/low/unknown findings remain in the full reports for periodic review.
 
-`security-review.py` collects reports without hiding findings. `security-gate.py` independently enforces image-role completeness, immutable identities and high/critical policy, and writes `release-gate.json` with `publicProductionApproved=false`. Eight policy regression tests cover missing/empty evidence, new high findings, exception expiry, changed configuration and newly available fixes. npm and NuGet high/critical advisories also fail the gate.
+`security-review.py` collects reports without hiding findings. `security-gate.py` independently enforces image-role completeness, immutable identities and high/critical policy, and writes `release-gate.json` with `publicProductionApproved=false`. Nine policy regression tests cover missing/empty evidence, new high findings, exception expiry, changed configuration and newly available fixes. npm and NuGet high/critical advisories also fail the gate.

@@ -1,4 +1,4 @@
-> **Milestone 8 in progress:** mandatory Administrator MFA and secure account recovery. [Enrollment, recovery, security events and restore reconciliation](docs/mfa-recovery.md). Milestone 7 is merged; final M8 integration/staging verification is pending. No merge or public deployment.
+> **Milestone 8 review candidate:** mandatory Administrator MFA and secure account recovery. [Enrollment, recovery, security events and restore reconciliation](docs/mfa-recovery.md). Milestone 7 is merged. Executed M8 integration and HTTPS recovery evidence is recorded in [readiness](docs/staging-readiness.md); final-head checks govern review readiness. No merge or public deployment.
 
 # Authentication milestone
 
