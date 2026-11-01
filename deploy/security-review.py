@@ -2,7 +2,7 @@
 import argparse,json,os,pathlib,subprocess
 p=argparse.ArgumentParser();p.add_argument('--project');p.add_argument('--images-only',action='store_true');p.add_argument('--output',default='security-evidence');p.add_argument('--image',action='append',default=[]);a=p.parse_args()
 out=pathlib.Path(a.output);out.mkdir(exist_ok=True,parents=True)
-summary={'mode':'evidence collection; security-gate.py evaluates policy','sourceRevision':os.environ.get('GITHUB_SHA','local'),'images':{}}
+summary={'mode':'evidence collection; security-gate.py evaluates policy','sourceRevision':os.environ.get('GITHUB_SHA','local'),'dependencyAuditsRequired':not a.images_only,'images':{}}
 if not a.images_only:
  if not a.project:raise SystemExit('A project is required for dependency audits')
  r=subprocess.run(['npm','audit','--json'],text=True,capture_output=True)

@@ -28,5 +28,6 @@ class PolicyTests(unittest.TestCase):
   def change(p,s,r):self.advisory(p,s,r);p['caddyConfigSha256']='changed'
   self.assertFalse(self.evaluate(change))
  def test_missing_image_rejected(self):self.assertFalse(self.evaluate(lambda p,s,r:s['images'].pop('db')))
+ def test_required_dependency_evidence_rejected(self):self.assertFalse(self.evaluate(lambda p,s,r:s.update(dependencyAuditsRequired=True)))
  def test_empty_report_rejected(self):self.assertFalse(self.evaluate(lambda p,s,r:r['db'].clear()))
 if __name__=='__main__':unittest.main()

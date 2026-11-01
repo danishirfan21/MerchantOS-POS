@@ -19,14 +19,14 @@ Verified runtime commits: POS `1238815f38e848716491dce0d9a3c6ae72e536bd`, Admin 
 | Key protection and recovery | Verified | Native certificate encryption, private mounts, encrypted XML assertions, rotation with old cookies, fail-closed missing configuration and protected-ring restore with explicit permissions. Wrapping certificate remains a separate offline recovery dependency. |
 | Secrets | Verified | Random file-mounted credentials; separate runtime DB roles; fail-closed artifact audits including outage logs. No dumps, cookies, private certificates or keys uploaded. Docker host remains trusted. |
 | Migration safety | Verified | Fresh installation, populated replay, concurrent advisory locking/checksums and failed-file atomic rollback; no reseeding/data loss. |
-| Backup/restore | Verified | Real encrypted custom dump restored into a new isolated DB; all fields compared across 11 business/auth/audit/idempotency tables. Apps then use restored DB/rings and existing unexpired cookies. Off-host disaster recovery remains operator work. |
+| Backup/restore | Verified | Real encrypted custom dump restored into a new isolated DB; all fields compared across 11 business/auth/audit/idempotency tables. That M7 cookie behavior is superseded in M8: restored identities are quarantined, and old cookies remain invalid after explicit per-person reconciliation. Off-host disaster recovery remains operator work. |
 | Liveness/readiness | Verified | Separate process/dependency status; real DB outage gives live 200/ready 503; readiness and valid-session access recover. |
 | Logging/correlation | Verified | Safe structured app logs, normalized/forwarded correlation ID observed in both services, filtered proxy failure metadata and error-parameter suppression; upload audit passes. |
 | Operational metrics/monitoring | Partially verified | Administrator-protected process counters/duration and native Meter; safe per-route logs. No persistent collector, alert delivery or on-call ownership. |
 | Restart/failure recovery | Verified | All service and full-stack restarts, forced API kill during checkout, DB outage, bounded same-key retries and exact-once stock/order behavior. Expired-record cleanup also exercised. |
 | Dependencies/supply chain | Partially verified | Maintained action SHAs, digest-pinned bases, npm lockfile and complete npm/NuGet/Trivy reports. npm advisories fixed; remaining image findings documented in dependency-review.md. Green scan execution does not clear vulnerabilities. |
 | Functional/responsive regressions | Verified | 31 POS .NET, 21 Angular, 21 POS browser; 61 Admin .NET, 3 templates, 94 Admin browser; 383 reporting checks on 10,000 historical orders, 99 management, 40 security checks (all prior 39 retained). |
-| MFA/self-service recovery | Not implemented | Public blocker. Gated operator password/role/disable/revoke commands exist; no insecure public recovery endpoint introduced. |
+| MFA and operator recovery | M8 implemented; final staging verification pending | Mandatory POS MFA, responsive enrollment/recovery/password forms, one-time factors and separately authorized operator commands; see mfa-recovery.md. |
 | Public production | Blocked | No public exposure authorized; remaining security/operations controls below are required. |
 
 The full staging drill passed **176 assertions** with real Docker/PostgreSQL/HTTPS on an isolated GitHub Actions Ubuntu runner. Docker was unavailable in the editing environment, so no local container execution is claimed. Four additional artifact-auditor tests exercise secret/key/dump rejection and embedded-report decoding. No existing meaningful assertion or authentication boundary was removed.
@@ -41,7 +41,7 @@ The unchanged management suite caught malformed requests becoming 500 instead of
 
 ## Public deployment blockers and limitations
 
-- MFA, verified password recovery/enrollment and operator access ownership/approvals are absent.
+- M8 implements MFA and recovery; production operator access ownership, independent identity-verification procedure and approvals must still be assigned.
 - Single instance only. Fixed container names enforce the supported topology. Rate limits/metrics reset on app restart; no distributed rate state or distributed coordination is claimed.
 - TLS certificates are local, short-lived and manually renewed. No public domain, certificate automation or exposure approved.
 - Off-host backups, offline recovery-key custody, scheduled backup failure alerts and restore cadence require an assigned operator. No external monitoring destination or on-call ownership configured.

@@ -230,6 +230,10 @@ try:
   (work/directory).chmod(0o700)
   for file in (work/directory).glob('*.xml'):file.chmod(0o600)
  run('up','-d','pos-api','admin');wait_ready()
+ # Preserve stolen pre-restore cookies to check again after quarantine is released.
+ old_mvc=Client('admin');old_cashier=Client('cashier')
+ for cookie in mvc.jar:old_mvc.jar.set_cookie(copy.copy(cookie))
+ for cookie in cashier.jar:old_cashier.jar.set_cookie(copy.copy(cookie))
  # Restored identity data is preserved, but every restored authority is quarantined.
  check(b'Sign In' in mvc.mvc('/Admin/Orders')[1]);check(cashier.call('/api/orders/'+order)[0]==401)
  old_codes={role:take(factors/(role+'.codes')) for role in ['admin','other']}
@@ -240,6 +244,7 @@ try:
  seed_mfa('admin')
  admin=Client('admin').login(temporary['admin']);cashier=Client('cashier').login(temporary['cashier']);mvc=Client('admin').mvc_login();other=Client('other').mvc_login(temporary['other'])
  check(sql('SELECT count(*) FROM auth_restore_blocks','merchant_restore_drill')=='0');check(cashier.call('/api/orders/'+order)[0]==200)
+ check(old_cashier.call('/api/auth/me')[0]==401);check(b'Sign In' in old_mvc.mvc('/Admin/Orders')[1])
  for table in ['products','inventory_levels','orders','order_items','payments','checkout_idempotency','admin_audit','inventory_adjustments']:check(snapshot('merchant_restore_drill')[table]==before_restore[table])
  # A recovery code from before restore cannot redeem after explicit reconciliation.
  stale=Client('admin');stale.csrf();check(stale.call('/api/auth/login',{'username':(secret/'admin_username').read_text(),'password':(secret/'admin_password').read_text()})[0]==202)
