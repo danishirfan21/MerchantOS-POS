@@ -60,15 +60,15 @@ test('real expired cashier session resumes an interrupted sale after reauthentic
  await page.reload();await expect(page.getByRole('heading',{name:'MerchantOS POS',exact:true})).toBeVisible();expect((await page.request.get('/api/products')).status()).toBe(401);await signIn();await expect(page.getByRole('alert')).toContainText('uncertain');await page.getByRole('button',{name:'Retry same sale',exact:true}).click();await expect(page.getByRole('heading',{name:/Receipt MOS-/})).toBeVisible();expect(sent).toHaveLength(2);expect(sent[1]).toEqual(sent[0]);expect((await(await page.request.get('/api/inventory/p29')).json()).stock).toBe(before-1);await page.screenshot({path:info.outputPath('reauthenticated-receipt.png'),fullPage:true});
 });
 
-test('cashier sees actual API and PostgreSQL outages and safely retries after restart',async({page},info)=>{
+test('cashier recovers after real API restart and PostgreSQL pause',async({page},info)=>{
  test.setTimeout(90000);const {execFileSync}=await import('node:child_process');
  const api=(action:string)=>execFileSync('python3',['scripts/retail_server.py',action],{stdio:['ignore','pipe','pipe']});const db=(action:string)=>execFileSync('docker',[action,'merchantos-ci-'+process.env.GITHUB_RUN_ID],{stdio:['ignore','pipe','pipe']});
  const ready=async()=>{try{return(await page.request.get('/api/health/ready',{timeout:3000})).status()===200;}catch{return false;}};
  for(const target of ['api','database']){
   await catalog(page);const before=(await(await page.request.get('/api/inventory/p25')).json()).stock;await page.getByRole('button',{name:'Add Apple 20W Adapter',exact:true}).click();await cart(page,info);await page.getByRole('button',{name:/Proceed to Checkout/}).click();await page.getByRole('combobox',{name:'Payment method'}).selectOption('card');let stopped=false;
   try{
-   target==='api'?api('stop'):db('stop');stopped=true;await expect.poll(ready,{timeout:20000}).toBeFalsy();await page.getByRole('button',{name:'Complete sale',exact:true}).click();await expect(page.getByRole('alert')).toContainText('uncertain');await expect(page.getByRole('combobox',{name:'Payment method'})).toBeDisabled();await page.screenshot({path:info.outputPath(target+'-outage.png')});
-  }finally{if(stopped)target==='api'?api('start'):db('start');}
+   target==='api'?api('stop'):db('pause');stopped=true;await expect.poll(ready,{timeout:20000}).toBeFalsy();await page.getByRole('button',{name:'Complete sale',exact:true}).click();await expect(page.getByRole('alert')).toContainText('uncertain',{timeout:45000});await expect(page.getByRole('combobox',{name:'Payment method'})).toBeDisabled();await page.screenshot({path:info.outputPath(target+'-outage.png')});
+  }finally{if(stopped)target==='api'?api('start'):db('unpause');}
   await expect.poll(ready,{timeout:30000}).toBeTruthy();await page.getByRole('button',{name:'Retry same sale',exact:true}).click();await expect(page.getByRole('heading',{name:/Receipt MOS-/})).toBeVisible();expect((await(await page.request.get('/api/inventory/p25')).json()).stock).toBe(before-1);
  }
 });

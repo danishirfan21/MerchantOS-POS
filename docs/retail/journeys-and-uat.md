@@ -31,7 +31,7 @@ Each row identifies the starting point, actions, result, failure/recovery and ex
 | E02 responsive | Desktop 1440×900, tablet 768×1024, mobile 390×844, POS 320px reflow | Screenshot review, keyboard correction; no design replacement | Both `retail.spec.ts`; preserved Admin tablet/mobile suites |
 | E03 Arabic | Arabic search/product labels/cart/payment/receipt; SAR remains exact | English/Arabic copy complete for new pending-sale messages | POS `catalog.spec.ts`, `checkout.i18n.spec.ts`, `retail.spec.ts` |
 
-C08 additionally stops/restarts the actual disposable API process and PostgreSQL container during Playwright cashier checkout, checks the visible uncertainty state and successful exact-once recovery at each viewport. The broader HTTPS infrastructure drill uses HTTP clients; browser and infrastructure evidence remain separately labelled. No actual printer hardware, real card network, human screen-reader session or public deployment is tested.
+C08 additionally stops/restarts the actual disposable API process and pauses/resumes the actual PostgreSQL container during Playwright cashier checkout, checks the visible uncertainty state and successful exact-once recovery at each viewport. The broader HTTPS infrastructure drill uses HTTP clients; browser and infrastructure evidence remain separately labelled. No actual printer hardware, real card network, human screen-reader session or public deployment is tested.
 
 ## Human session guide (pending)
 

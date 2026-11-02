@@ -3,7 +3,7 @@ import json,os,pathlib,signal,subprocess,sys
 if os.environ.get('GITHUB_ACTIONS')!='true':raise SystemExit('Disposable CI only')
 root=pathlib.Path(__file__).resolve().parent.parent;state=root/'.retail-api.json';dll=root/'services/merchant-api/bin/Release/net10.0/MerchantOS.Api.dll'
 if sys.argv[1]=='start':
- with open(root/'api.log','ab') as log:child=subprocess.Popen(['dotnet',str(dll)],cwd=dll.parents[3],stdout=log,stderr=log,start_new_session=True)
+ with open(root/'api.log','ab') as log:child=subprocess.Popen(['dotnet',str(dll)],cwd=dll.parents[3],stdout=log,stderr=log,start_new_session=True,env={**os.environ,'ConnectionStrings__MerchantDb':os.environ['ConnectionStrings__MerchantDb']+';Timeout=3;Command Timeout=5'})
  state.touch(mode=0o600);state.write_text(json.dumps({'pid':child.pid,'assembly':str(dll)}));print('Disposable retail API started.')
 elif sys.argv[1]=='stop':
  record=json.loads(state.read_text());pid=record['pid'];command=pathlib.Path('/proc')/str(pid)/'cmdline'
