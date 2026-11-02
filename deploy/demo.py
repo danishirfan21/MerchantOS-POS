@@ -25,13 +25,13 @@ base=['docker','compose','--env-file',str(d/'staging.env'),'-p',info['project'],
 def compose(*args):run(base+list(args),env=env)
 if a.action=='start':
  if (d/'started').exists():raise SystemExit('Already initialized. Use status or docker compose up to resume; reset requires explicit confirmation.')
- compose('config','--quiet');compose('build');compose('up','-d','--wait','db');compose('run','--rm','migrate')
+ compose('config','--quiet');compose('build');compose('up','-d','--wait','--wait-timeout','180','db');compose('run','--rm','migrate')
  # Operator capability and exactly three private files are mounted only into each one-shot command.
  for role,authority in [('admin','Administrator'),('cashier','Cashier')]:
   args=['run','--rm','--no-deps']
   for source,target in [('operator_connection','connection'),(role+'_username','username'),(role+'_password','password')]:args+=['-v',str(d/'secrets'/source)+':/operator/'+target+':ro']
   args+=['-e','ConnectionStrings__MerchantDbFile=/operator/connection','-e','Operations__AllowAccountCommand=true','-e','Account__Operation=create','-e','Account__UsernameFile=/operator/username','-e','Account__PasswordFile=/operator/password','-e','Account__Role='+authority,'pos-api','--account'];compose(*args)
- compose('up','-d','--wait','pos-api','admin','web');(d/'started').touch(mode=0o600)
+ compose('up','-d','--wait','--wait-timeout','180','pos-api','admin','web');(d/'started').touch(mode=0o600)
 if a.action in ['status','start']:
  context=ssl.create_default_context(cafile=str(d/'secrets/ca.crt'))
  for url in ['https://localhost:8443/api/health/ready','https://localhost:9443/health/ready']:
