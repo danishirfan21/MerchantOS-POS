@@ -114,7 +114,7 @@ export class CheckoutComponent implements OnInit {
     else if (!event.shiftKey && document.activeElement === controls.at(-1)) { event.preventDefault(); controls[0].focus(); }
   }
   private resetPendingRequest(): void { this.pendingKey = null; this.pendingFingerprint = null; this.pendingPayload = null; this.uncertain.set(false); if (this.username && typeof sessionStorage !== 'undefined') sessionStorage.removeItem(this.storageKey()); }
-  closePayment(): void { if (!this.saleLocked() && this.paymentOpen()) { this.paymentOpen.set(false); this.focusBeforeDialog?.focus(); } }
+  closePayment(): void { if (!this.saleLocked() && this.paymentOpen()) { this.paymentOpen.set(false); if (typeof document !== 'undefined') setTimeout(() => this.focusBeforeDialog?.focus()); } }
   clearCart(): void { if (!this.saleLocked()) { this.cart.clear(); this.resetPendingRequest(); } }
   removeProduct(id: string): void { if (!this.saleLocked()) { this.cart.remove(id); this.resetPendingRequest(); } }
   readonly categoryCount = (category: string): number => category === 'All products' ? this.products().length : this.products().filter((p) => p.category === category).length;
@@ -146,7 +146,7 @@ export class CheckoutComponent implements OnInit {
   selectCategory(category: string): void { this.selectedCategory.set(category); }
   onSearch(event: Event): void { this.query.set((event.target as HTMLInputElement).value); }
   setNav(item: string): void { this.activeNav.set(item); }
-  clearFilters(): void { this.query.set(''); this.selectCategory('All products'); }
+  clearFilters(): void { this.query.set(''); this.selectCategory('All products'); this.focusSoon('#product-search'); }
   toggleLanguage(): void { this.isArabic.update((value) => !value); this.checkoutError.set(null); if (this.loadError()) this.loadError.set(this.t('catalogError')); }
   increase(id: string): void { const line = this.cart.lines().find((item) => item.product.id === id); if (line && !this.saleLocked()) { this.cart.setQuantity(id, line.quantity + 1); this.resetPendingRequest(); } }
   decrease(id: string): void { const line = this.cart.lines().find((item) => item.product.id === id); if (line && !this.saleLocked()) { this.cart.setQuantity(id, line.quantity - 1); this.resetPendingRequest(); } }

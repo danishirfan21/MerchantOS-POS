@@ -33,7 +33,7 @@
       </section>
     } @else {
       <div class="work"><section class="catalog" [attr.aria-label]="t('catalog')">
-        <h1 class="visually-hidden">MerchantOS POS</h1><div class="utilities"><label class="search">⌕ <input id="product-search" type="search" [placeholder]="t('searchPlaceholder')" [value]="query()" (input)="onSearch($event)" [attr.aria-label]="t('search')"/><kbd>F2</kbd></label></div>
+        <h1 class="visually-hidden">MerchantOS register</h1><div class="utilities"><label class="search">⌕ <input id="product-search" type="search" [placeholder]="t('searchPlaceholder')" [value]="query()" (input)="onSearch($event)" [attr.aria-label]="t('search')"/><kbd>F2</kbd></label></div>
         <div class="categories" role="group" [attr.aria-label]="t('categories')">@for (category of categories; track category) {<button [class.active]="selectedCategory() === category" (click)="selectCategory(category)" [attr.aria-pressed]="selectedCategory() === category">{{ getCategoryLabel(category) }} @if (selectedCategory() === category) {<span>{{ catalog().length }}</span>}</button>}</div>
         <p class="visually-hidden" role="status">{{ catalog().length }} {{ t('searchResults') }}</p><div class="grid-scroll">
           @if (isLoading()) {<div class="empty" role="status">{{ t('loadingCatalog') }}</div>}
