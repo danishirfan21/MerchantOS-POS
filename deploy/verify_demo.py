@@ -7,7 +7,8 @@ try:
  launch('init','--admin',str(pathlib.Path(a.admin).resolve()));launch('start');launch('status');s=directory/'secrets';ctx=ssl.create_default_context(cafile=str(s/'ca.crt'));jar=http.cookiejar.CookieJar();client=urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx),urllib.request.HTTPCookieProcessor(jar))
  def api(path,data=None,token=None):
   req=urllib.request.Request('https://localhost:8443'+path,data=None if data is None else json.dumps(data).encode(),headers={'Content-Type':'application/json',**({'X-CSRF-TOKEN':token} if token else {})})
-  with client.open(req,timeout=15) as response:return response.status,json.loads(response.read())
+  with client.open(req,timeout=15) as response:
+   raw=response.read();return response.status,json.loads(raw) if raw else None
  token=api('/api/auth/csrf')[1]['token'];assert api('/api/auth/login',{'username':(s/'cashier_username').read_text(),'password':(s/'cashier_password').read_text()},token)[0]==200
  token=api('/api/auth/csrf')[1]['token'];products=api('/api/products')[1];assert len(products)==30
  stock=api('/api/inventory/p17')[1]['stock'];body={'items':[{'productId':'p17','quantity':1}],'discountPercent':5,'paymentMethod':'card','cashTenderedHalalas':None,'cardScenario':'success','idempotencyKey':str(uuid.uuid4())}
