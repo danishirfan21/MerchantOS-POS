@@ -1,5 +1,6 @@
 /** UI copy for the two supported languages. Product names come from the catalog API. */
 export const copy = {
+  signOut: ['Sign out', 'تسجيل الخروج'], mobileNavigation: ['Mobile navigation', 'التنقل على الهاتف'],
   retrySale: ['Retry same sale', 'إعادة محاولة البيع نفسه'], searchResults: ['products found', 'منتجات تم العثور عليها'], pendingStorageError: ['Cannot safely save this pending sale in this browser. Keep this tab open and ask the manager to reconcile before starting another sale.', 'تعذر حفظ عملية البيع المعلقة بأمان في هذا المتصفح. أبقِ علامة التبويب مفتوحة واطلب من المدير التحقق قبل بدء بيع جديد.'],
   checkout: ['Checkout', 'البيع'], orders: ['Orders', 'الطلبات'], products: ['Products', 'المنتجات'], settings: ['Settings', 'الإعدادات'],
   demoStore: ['Demo store · Riyadh', 'متجر تجريبي · الرياض'], connected: ['Catalog connected', 'الكتالوج متصل'], disconnected: ['Catalog unavailable', 'الكتالوج غير متاح'], demoCashier: ['Demo cashier', 'أمين صندوق تجريبي'], demoRegister: ['Demo register', 'صندوق تجريبي'],

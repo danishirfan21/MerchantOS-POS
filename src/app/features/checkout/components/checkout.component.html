@@ -1,4 +1,4 @@
-<div class="pos" [class.rtl]="isArabic()" [attr.dir]="isArabic() ? 'rtl' : 'ltr'" (keydown)="onKeydown($event)">
+<div class="pos" [attr.lang]="isArabic() ? 'ar' : 'en'" [class.rtl]="isArabic()" [attr.dir]="isArabic() ? 'rtl' : 'ltr'" (keydown)="onKeydown($event)">
   <aside class="side" [attr.inert]="paymentOpen() || cartOpen() ? '' : null">
     <div class="logo"><span aria-hidden="true">▣</span><div><strong>MerchantOS</strong><small>{{ t('demoRegister') }}</small></div></div>
     <nav [attr.aria-label]="t('categories')">
@@ -13,7 +13,7 @@
     <header class="header">
       <div class="mobile-logo">▣　<strong>MerchantOS</strong></div>
       <div class="branch">▣　{{ t('demoStore') }} <span>{{ loadError() ? t('disconnected') : t('connected') }}</span></div>
-      <div class="header-right"><button [disabled]="saleLocked()" (click)="toggleLanguage()" [attr.aria-label]="isArabic() ? 'Switch language to English' : 'Switch language to Arabic'">EN / عربي</button><span class="cashier-name">{{ username }}</span><button type="button" [disabled]="saleLocked()" class="auth-signout" (click)="signOut.emit()">Sign out</button></div>
+      <div class="header-right"><button [disabled]="saleLocked()" (click)="toggleLanguage()" [attr.aria-label]="isArabic() ? 'Switch language to English' : 'Switch language to Arabic'">EN / عربي</button><span class="cashier-name">{{ username }}</span><button type="button" [disabled]="saleLocked()" class="auth-signout" (click)="signOut.emit()">{{ t('signOut') }}</button></div>
     </header>
     @if (screen() === 'orders') {
       <section class="history"><button (click)="goCheckout()">← {{ t('checkout') }}</button><h1>{{ t('orderHistory') }}</h1>
@@ -51,7 +51,7 @@
       </aside></div>
     }
     @if (screen() === 'checkout') {<button class="mobile-cart" (click)="openCart()" [attr.aria-label]="t('openCart')+', '+cart.itemCount()+' '+t('items')">▣　{{ t('viewCart') }} <span>{{ cart.itemCount() }} {{ t('items') }} · {{ formatMoney(totalHalalas()) }}　↑</span></button>}
-    <nav class="mobile-nav" aria-label="Mobile navigation"><button [class.active]="screen() === 'checkout'" (click)="goCheckout()">⚿<small>{{ t('checkout') }}</small></button><button [class.active]="screen() === 'orders'" (click)="showOrders()">▤<small>{{ t('orders') }}</small></button><button disabled [title]="t('unavailable')">▧<small>{{ t('products') }}</small></button><button disabled [title]="t('unavailable')">⚙<small>{{ t('settings') }}</small></button></nav>
+    <nav class="mobile-nav" [attr.aria-label]="t('mobileNavigation')"><button [class.active]="screen() === 'checkout'" (click)="goCheckout()">⚿<small>{{ t('checkout') }}</small></button><button [class.active]="screen() === 'orders'" (click)="showOrders()">▤<small>{{ t('orders') }}</small></button><button disabled [title]="t('unavailable')">▧<small>{{ t('products') }}</small></button><button disabled [title]="t('unavailable')">⚙<small>{{ t('settings') }}</small></button></nav>
   </main>
   @if (paymentOpen()) {<div class="payment-backdrop" (click)="onPaymentBackdrop($event)"><section class="payment-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t('completePayment')" (keydown)="trapFocus($event)"><button class="close-payment" (click)="closePayment()" [disabled]="saleLocked()" [attr.aria-label]="t('closePayment')">×</button><h2>{{ t('completePayment') }}</h2><p>{{ t('totalDue') }}: <strong>{{ formatMoney(totalHalalas()) }}</strong></p><label>{{ t('paymentMethod') }} <select [value]="paymentMethod()" (change)="paymentMethod.set($any($event.target).value)" [disabled]="saleLocked()"><option value="cash">{{ t('cash') }}</option><option value="card">{{ t('card') }}</option></select></label>@if (paymentMethod() === 'cash') {<label>{{ t('cashTendered') }} <input type="number" min="0" step="0.01" [value]="cashTendered()" (input)="cashTendered.set($any($event.target).value)" [disabled]="saleLocked()"/></label><p>{{ t('change') }}: {{ formatMoney(changeHalalas()) }}</p>} @else {<label>{{ t('simulation') }} <select [value]="cardScenario()" (change)="cardScenario.set($any($event.target).value)" [disabled]="saleLocked()"><option value="success">{{ t('approve') }}</option><option value="decline">{{ t('decline') }}</option></select></label><p>{{ t('noCardData') }}</p>}@if (checkoutError()) {<p role="alert">{{ checkoutError() }}</p>}<button class="checkout" (click)="submitCheckout()" [disabled]="submitting() || (!cart.itemCount() && !uncertain())">{{ submitting() ? t('processing') : uncertain() ? t('retrySale') : t('completeSale') }}</button></section></div>}
   @if (cartOpen()) {<button class="scrim" (click)="closeCart()" [attr.aria-label]="t('closeOverlay')"></button>}
