@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
+      RETAIL_SOURCE_SHA: "${{ github.event.pull_request.head.sha || github.sha }}"
       ASPNETCORE_ENVIRONMENT: Development
       Security__AllowLoopbackHttp: true
       ASPNETCORE_URLS: http://127.0.0.1:5080
