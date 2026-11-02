@@ -1,3 +1,5 @@
+> M9 operational addition: [backup/recovery](operations/backup-recovery.md), [access/incident responsibilities](operations/ownership-incidents.md), [audit trust boundaries](operations/architecture.md). Operator account commands now use the dedicated identity-operator connection; private recovery material is outside normal app mounts. Earlier milestone evidence remains historical.
+
 > Milestone 8 changes authentication and restore policy. Read [MFA, recovery and identity reconciliation](mfa-recovery.md) first; earlier milestone details below remain historical where superseded.
 
 # Isolated staging operations (Milestone 7)

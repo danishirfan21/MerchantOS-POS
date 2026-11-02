@@ -100,6 +100,7 @@ app.MapManagement();
 app.MapReporting();
 
 // Authenticated demo; public deployment remains outside scope.
+app.MapMonitor("/api/ops/monitor");
 app.Run();
 
 public partial class Program { }

@@ -1,0 +1,42 @@
+name: Security operations and disaster recovery adapters
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  operations:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SOURCE_REVISION: "${{ github.event.pull_request.head.sha || github.sha }}"
+      ASPNETCORE_ENVIRONMENT: Development
+      Security__AllowLoopbackHttp: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: '10.0.x'
+      - name: Install reviewed operational Python dependencies
+        run: bash deploy/operations/install-ci.sh
+      - name: Create disposable PostgreSQL and native MFA identities
+        run: |
+          python3 deploy/ci_database.py
+      - name: Apply all schemas and provision native identities
+        run: |
+          for file in db/init/*.sql db/migrations/*.sql; do psql -h 127.0.0.1 -p 5433 -U merchantos -d merchantos -v ON_ERROR_STOP=1 -f "$file"; done
+          dotnet build services/merchant-api/MerchantOS.Api.csproj -c Release
+          python3 scripts/ci_accounts.py
+      - name: Validate recurring backup calendar
+        run: systemd-analyze calendar '*-*-* 02:00:00 UTC'
+      - name: Real backup, S3, outbox, signed witness and alert delivery verification
+        run: python3 deploy/operations/verify_operations.py
+      - name: Audit operational evidence before upload
+        id: audit
+        if: always()
+        run: |
+          python3 scripts/audit_artifacts.py operations-results.json
+          if test -f operations-results.json; then python3 -c "import json,pathlib;p=pathlib.Path('operations-results.json');r=json.loads(p.read_text());r['credentialAudit']='passed';p.write_text(json.dumps(r,indent=2))"; fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always() && steps.audit.outcome == 'success'
+        with:
+          name: security-operations-evidence
+          path: operations-results.json

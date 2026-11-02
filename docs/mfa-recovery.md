@@ -1,3 +1,5 @@
+> M9 operational addition: [backup/recovery](operations/backup-recovery.md), [access/incident responsibilities](operations/ownership-incidents.md), [audit trust boundaries](operations/architecture.md). Operator account commands now use the dedicated identity-operator connection; private recovery material is outside normal app mounts. Earlier milestone evidence remains historical.
+
 # Milestone 8 MFA and account recovery
 
 POS is the sole identity authority. Admin remains a server-side BFF over the same PostgreSQL database. No browser role or MFA flag grants authority. Administrator MFA is mandatory in Development and Staging as well as production configuration. Cashiers retain password sign-in; recovered Cashiers must replace their temporary credential through the POS sign-in screen before checkout.

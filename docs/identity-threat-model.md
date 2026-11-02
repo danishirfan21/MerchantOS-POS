@@ -1,3 +1,5 @@
+> M9 operational addition: [backup/recovery](operations/backup-recovery.md), [access/incident responsibilities](operations/ownership-incidents.md), [audit trust boundaries](operations/architecture.md). Operator account commands now use the dedicated identity-operator connection; private recovery material is outside normal app mounts. Earlier milestone evidence remains historical.
+
 # Milestone 8 identity threat model
 
 Prerequisite verified: POS M7 merged `2f5514156ba8acd4224dc5b92099335a95628e0a` ([post-merge CI](https://github.com/danishirfan21/MerchantOS-POS/actions/runs/41285416463)); Admin M7 merged `0bbe2e5849fc05b0092cce009cd9d6387ca4204a` ([post-merge recovery CI](https://github.com/danishirfan21/MerchantOS-Admin/actions/runs/41285428663)). New branches start at these current mains; previous PRs are completed history.

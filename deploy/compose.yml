@@ -20,6 +20,7 @@ x-security: &security
   Kestrel__Certificates__Default__Path: /run/secrets/tls.pfx
   Kestrel__Certificates__Default__PasswordFile: /run/secrets/pfx_password
   ASPNETCORE_URLS: https://+:8443
+  Operations__MonitorTokenFile: /run/secrets/monitor_token
   AllowedHosts: localhost;127.0.0.1;pos-api;admin
 services:
   db:
@@ -61,6 +62,11 @@ services:
       - ${STAGING_DIR}/secrets/pos_db_password:/run/secrets/pos_db_password:ro
       - ${STAGING_DIR}/secrets/admin_db_password:/run/secrets/admin_db_password:ro
       - ${STAGING_DIR}/secrets/ca.crt:/run/secrets/ca.crt:ro
+      - ${STAGING_DIR}/secrets/backup_db_password:/run/secrets/backup_db_password:ro
+      - ${STAGING_DIR}/secrets/export_db_password:/run/secrets/export_db_password:ro
+      - ${STAGING_DIR}/secrets/monitor_db_password:/run/secrets/monitor_db_password:ro
+      - ${STAGING_DIR}/secrets/operator_db_password:/run/secrets/operator_db_password:ro
+      - ${STAGING_DIR}/secrets/audit_read_db_password:/run/secrets/audit_read_db_password:ro
     depends_on: {db: {condition: service_healthy}}
     networks: [private]
     tmpfs: ['/tmp:mode=1777,size=128m']
@@ -81,6 +87,7 @@ services:
       - ${STAGING_DIR}/secrets/dp_password:/run/secrets/dp_password:ro
       - ${STAGING_DIR}/secrets/tls.pfx:/run/secrets/tls.pfx:ro
       - ${STAGING_DIR}/secrets/pfx_password:/run/secrets/pfx_password:ro
+      - ${STAGING_DIR}/secrets/monitor_token:/run/secrets/monitor_token:ro
       - ${STAGING_DIR}/secrets/ca.crt:/run/secrets/ca.crt:ro
     depends_on: {migrate: {condition: service_completed_successfully}}
   admin:
@@ -101,6 +108,7 @@ services:
       - ${STAGING_DIR}/secrets/dp_password:/run/secrets/dp_password:ro
       - ${STAGING_DIR}/secrets/tls.pfx:/run/secrets/tls.pfx:ro
       - ${STAGING_DIR}/secrets/pfx_password:/run/secrets/pfx_password:ro
+      - ${STAGING_DIR}/secrets/monitor_token:/run/secrets/monitor_token:ro
       - ${STAGING_DIR}/secrets/ca.crt:/run/secrets/ca.crt:ro
     depends_on: {pos-api: {condition: service_healthy}}
   web:
@@ -123,9 +131,9 @@ services:
     image: ${COMPOSE_PROJECT_NAME:-merchantos_staging}-ops
     profiles: [tools]
     command: [/ops/backup.py]
-    environment: {PGHOST: db, PGDATABASE: merchantos, PGUSER: merchantos, PGPASSFILE: /run/secrets/pgpass}
+    environment: {PGHOST: db, PGDATABASE: merchantos, PGUSER: merchant_backup, PGPASSFILE: /run/secrets/pgpass}
     volumes:
-      - ${STAGING_DIR}/secrets/pgpass:/run/secrets/pgpass:ro
+      - ${STAGING_DIR}/secrets/backup_pgpass:/run/secrets/pgpass:ro
       - ${STAGING_DIR}/secrets/backup_cert.pem:/run/secrets/backup_cert.pem:ro
       - ${STAGING_DIR}/backups:/backups
     tmpfs: ['/tmp:mode=1777,size=128m']
@@ -141,7 +149,7 @@ services:
     environment: {PGHOST: db, PGDATABASE: merchantos, PGUSER: merchantos, PGPASSFILE: /run/secrets/pgpass}
     volumes:
       - ${STAGING_DIR}/secrets/pgpass:/run/secrets/pgpass:ro
-      - ${BACKUP_PRIVATE_KEY_FILE:-${STAGING_DIR}/secrets/backup_key.pem}:/run/secrets/backup_key.pem:ro
+      - ${BACKUP_PRIVATE_KEY_FILE:-${STAGING_DIR}/recovery-material/backup_key.pem}:/run/secrets/backup_key.pem:ro
       - ${STAGING_DIR}/backups:/backups:ro
     tmpfs: ['/tmp:mode=1777,size=128m']
     networks: [private]

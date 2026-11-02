@@ -22,6 +22,7 @@ for i,argument in enumerate(a.image):
  path=out/f'image-{i}.json'
  inspected=json.loads(subprocess.check_output(['docker','image','inspect',image],text=True))[0]
  # Scan by immutable image ID, not a mutable tag that could move between inspection and scan.
- image_id=inspected['Id'];subprocess.run([os.environ['TRIVY_PATH'],'image','--scanners','vuln','--format','json','--output',str(path),'--timeout','10m',image_id],check=True)
+ image_id=inspected['Id'];subprocess.run([os.environ['TRIVY_PATH'],'image','--scanners','vuln','--list-all-pkgs','--format','json','--output',str(path),'--timeout','10m',image_id],check=True)
+ subprocess.run([os.environ['TRIVY_PATH'],'convert','--format','cyclonedx','--output',str(out/f'image-{i}.cdx.json'),str(path)],check=True)
  report=json.loads(path.read_text());v=[v for r in report.get('Results',[]) for v in r.get('Vulnerabilities',[])];summary['images'][role]={'image':image,'imageId':image_id,'rootfsLayerDigests':inspected.get('RootFS',{}).get('Layers',[]),'report':path.name,'severity':{severity:sum(vv['Severity']==severity for vv in v) for severity in ['CRITICAL','HIGH','MEDIUM','LOW','UNKNOWN']}}
 (out/'summary.json').write_text(json.dumps(summary,indent=2));print(json.dumps(summary,indent=2))

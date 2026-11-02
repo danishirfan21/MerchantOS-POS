@@ -1,0 +1,75 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketVersioning",
+        "s3:GetBucketObjectLockConfiguration"
+      ],
+      "Resource": "arn:aws:s3:::REPLACE_BUCKET"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:GetObjectVersion",
+        "s3:PutObjectRetention"
+      ],
+      "Resource": "arn:aws:s3:::REPLACE_BUCKET/REPLACE_PURPOSE_PREFIX/*"
+    },
+    {
+      "Effect": "Deny",
+      "Action": [
+        "s3:DeleteObject",
+        "s3:DeleteObjectVersion",
+        "s3:BypassGovernanceRetention"
+      ],
+      "Resource": "arn:aws:s3:::REPLACE_BUCKET/REPLACE_PURPOSE_PREFIX/*"
+    },
+    {
+      "Effect": "Deny",
+      "Action": "s3:PutObject",
+      "Resource": "arn:aws:s3:::REPLACE_BUCKET/REPLACE_PURPOSE_PREFIX/*",
+      "Condition": {
+        "Null": {
+          "s3:if-none-match": "true"
+        }
+      }
+    },
+    {
+      "Effect": "Deny",
+      "Action": "s3:PutObjectRetention",
+      "Resource": "arn:aws:s3:::REPLACE_BUCKET/REPLACE_PURPOSE_PREFIX/*",
+      "Condition": {
+        "NumericLessThan": {
+          "s3:object-lock-remaining-retention-days": "30"
+        }
+      }
+    },
+    {
+      "Effect": "Deny",
+      "Action": "s3:PutObjectRetention",
+      "Resource": "arn:aws:s3:::REPLACE_BUCKET/REPLACE_PURPOSE_PREFIX/*",
+      "Condition": {
+        "NumericGreaterThan": {
+          "s3:object-lock-remaining-retention-days": "90"
+        }
+      }
+    },
+    {
+      "Effect": "Deny",
+      "Action": [
+        "s3:PutObject",
+        "s3:PutObjectRetention"
+      ],
+      "Resource": "arn:aws:s3:::REPLACE_BUCKET/REPLACE_PURPOSE_PREFIX/*",
+      "Condition": {
+        "StringNotEquals": {
+          "s3:object-lock-mode": "COMPLIANCE"
+        }
+      }
+    }
+  ]
+}

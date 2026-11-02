@@ -1,6 +1,6 @@
 """Encrypted, bounded-retention PostgreSQL backups. Plaintext dump exists only in private tmpfs."""
 import argparse,datetime,hashlib,json,os,pathlib,subprocess,tempfile
-p=argparse.ArgumentParser();p.add_argument('--output',default='/backups');p.add_argument('--public-cert',default='/run/secrets/backup_cert.pem');a=p.parse_args();os.umask(0o077)
+p=argparse.ArgumentParser();p.add_argument('--output',default='/backups');p.add_argument('--public-cert',default='/run/secrets/backup_cert.pem');p.add_argument('--retain-all-local',action='store_true');a=p.parse_args();os.umask(0o077)
 out=pathlib.Path(a.output);out.mkdir(parents=True,exist_ok=True);stamp=datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ');dest=out/(stamp+'.dump.cms')
 with tempfile.TemporaryDirectory() as tmp:
  dump=pathlib.Path(tmp)/'data.dump'
@@ -12,5 +12,5 @@ with tempfile.TemporaryDirectory() as tmp:
 manifest={'ciphertextSha256':hashlib.sha256(dest.read_bytes()).hexdigest(),'createdUtc':stamp,'format':'pg_dump-custom+CMS-AES256','restoreVerified':False}
 (dest.with_suffix('.json')).write_text(json.dumps(manifest));cutoff=datetime.datetime.now().timestamp()-7*86400
 for old in out.glob('*.dump.cms'):
- if old.stat().st_mtime<cutoff:old.unlink();old.with_suffix('.json').unlink(missing_ok=True)
-print('Encrypted backup created; retention 7 days. A restore drill is still required.')
+ if not a.retain_all_local and old.stat().st_mtime<cutoff:old.unlink();old.with_suffix('.json').unlink(missing_ok=True)
+print('Encrypted backup created; a restore drill is still required. Upload worker retains unverified local objects and prunes only verified uploads.')

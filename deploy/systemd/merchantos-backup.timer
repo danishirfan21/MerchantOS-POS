@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily MerchantOS backup (override OnCalendar in an operator-reviewed drop-in)
+[Timer]
+OnCalendar=*-*-* 02:00:00 UTC
+Persistent=true
+RandomizedDelaySec=60
+Unit=merchantos-backup.service
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,13 @@
+[Unit]
+Description=MerchantOS transactional security outbox export
+[Service]
+Type=oneshot
+User=merchantos-audit-export
+ExecStart=/opt/merchantos/venv/bin/python /opt/merchantos/deploy/operations/audit.py export --database /etc/merchantos/audit-export.json --storage /etc/merchantos/audit-writer.json
+TimeoutStartSec=90
+KillMode=control-group
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+UMask=0077

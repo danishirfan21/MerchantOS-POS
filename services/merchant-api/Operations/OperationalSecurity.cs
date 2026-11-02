@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Text;
+using System.Security.Cryptography;
 using System.Net;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
@@ -74,6 +76,15 @@ public static class OperationalSecurity {
    }
   });
  }
+ public static void MapMonitor(this WebApplication app,string path) {
+  app.MapGet(path,(HttpContext context,OperationalMetrics metrics)=>{
+   var file=app.Configuration["Operations:MonitorTokenFile"];
+   if(file is null)return Results.Unauthorized();
+   var expected=File.ReadAllText(file).Trim();var supplied=context.Request.Headers.Authorization.ToString();
+   if(expected.Length<32||supplied.Length>160||!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes("Bearer "+expected),Encoding.UTF8.GetBytes(supplied)))return Results.Unauthorized();
+   return Results.Ok(metrics.Snapshot());
+  }).AllowAnonymous();
+ }
  public static void InitializeKeys(WebApplication app,string[] args) {
   if(!Enabled(app.Configuration))return;
   var protector=app.Services.GetRequiredService<IDataProtectionProvider>().CreateProtector("MerchantOS.StartupProbe");
@@ -93,8 +104,9 @@ public sealed class CorrelationHandler(IHttpContextAccessor accessor):Delegating
  protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct){if(accessor.HttpContext is {} context)request.Headers.TryAddWithoutValidation("X-Correlation-ID",context.TraceIdentifier);return base.SendAsync(request,ct);}
 }
 public sealed class OperationalMetrics {
- private readonly System.Collections.Concurrent.ConcurrentDictionary<string,long> counts=new();private long durationMicros;
+ private readonly System.Collections.Concurrent.ConcurrentDictionary<string,long> counts=new();private long durationMicros;private long checkoutFailures;private readonly System.Collections.Concurrent.ConcurrentQueue<(DateTime At,double Ms)> reporting=new();
  private static readonly System.Diagnostics.Metrics.Meter Meter=new("MerchantOS.Operations");private static readonly System.Diagnostics.Metrics.Counter<long> Requests=Meter.CreateCounter<long>("merchantos.requests");private static readonly System.Diagnostics.Metrics.Histogram<double> Duration=Meter.CreateHistogram<double>("merchantos.request.duration","ms");
- public void Record(string route,int status,double ms){counts.AddOrUpdate(status.ToString(),1,(_,n)=>n+1);Interlocked.Add(ref durationMicros,(long)(ms*1000));Requests.Add(1,new KeyValuePair<string,object?>("route",route),new("status",status));Duration.Record(ms,new KeyValuePair<string,object?>("route",route));}
- public object Snapshot()=>new{requestsByStatus=counts,totalDurationMs=Interlocked.Read(ref durationMicros)/1000m,scope="single-process; reset on restart"};
+ public void Record(string route,int status,double ms){if(route=="/api/checkout"&&status>=500)Interlocked.Increment(ref checkoutFailures);if(route.StartsWith("/api/admin/reports",StringComparison.Ordinal)){reporting.Enqueue((DateTime.UtcNow,ms));while(reporting.Count>1000)reporting.TryDequeue(out _);}
+ counts.AddOrUpdate(status.ToString(),1,(_,n)=>n+1);Interlocked.Add(ref durationMicros,(long)(ms*1000));Requests.Add(1,new KeyValuePair<string,object?>("route",route),new("status",status));Duration.Record(ms,new KeyValuePair<string,object?>("route",route));}
+ public object Snapshot(){while(reporting.TryPeek(out var value)&&value.At<DateTime.UtcNow.AddMinutes(-5))reporting.TryDequeue(out _);return new{requestsByStatus=counts,totalDurationMs=Interlocked.Read(ref durationMicros)/1000m,checkoutFailures=Interlocked.Read(ref checkoutFailures),reportingMaxMs=reporting.Select(x=>x.Ms).DefaultIfEmpty(0).Max(),scope="single-process; reset on restart; reporting maximum is bounded to five minutes/1000 requests"};}
 }

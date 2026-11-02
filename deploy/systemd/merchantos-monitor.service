@@ -1,0 +1,14 @@
+[Unit]
+Description=MerchantOS operational collection and alert delivery
+[Service]
+Type=oneshot
+User=merchantos-monitor
+ExecStart=/opt/merchantos/venv/bin/python /opt/merchantos/deploy/operations/monitor.py --config /etc/merchantos/monitor.json
+TimeoutStartSec=90
+KillMode=control-group
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/merchantos-monitor
+UMask=0077
