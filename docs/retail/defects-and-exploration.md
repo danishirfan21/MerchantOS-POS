@@ -20,3 +20,5 @@ R04 Medium — the new blank MFA and mobile Overview/Orders scans measured white
 The first launcher verification redirected initializer masking commands into a private log; the artifact audit correctly blocked that log from upload. Initialization now streams its mask registrations directly to the CI runner, and only safe launcher-result JSON is included in artifacts. The credential audit is preserved.
 
 The first real browser DB-outage fixture used Docker stop against an auto-remove disposable container; Docker correctly removed it, so the restart attempt failed and later cases could not connect. The fixture now pauses/resumes PostgreSQL, preserving its process/data while making the real database unavailable, with guaranteed cleanup and bounded CI-only connection/command timeouts. No application or security assertion is removed.
+
+A follow-up mobile scan found secondary stock-threshold labels/reset links at 4.34:1 and count chips at 4.09:1 on tinted surfaces (Admin `d2e53e7`, run 41379182511). Darken the mobile secondary text tone to #475569, preserving the same neutral palette and component layout.
