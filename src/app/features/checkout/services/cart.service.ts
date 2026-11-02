@@ -37,6 +37,9 @@ export class CartService {
     }));
   }
 
+  /** Resume only the frozen display snapshot; the server remains authoritative on retry. */
+  restorePending(lines: CartLine[]): void { this.linesState.set(lines); }
+
   remove(productId: string): void { this.linesState.update((lines) => lines.filter((line) => line.product.id !== productId)); }
   clear(): void { this.linesState.set([]); }
 }

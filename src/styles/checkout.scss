@@ -23,3 +23,10 @@
 /* Keep SAR amounts legible alongside mixed Arabic and Latin product names. */
 .product-bottom strong,.line-price,.money strong,.payable strong,.receipt-line strong{direction:ltr;unicode-bidi:isolate}
 @media(max-width:390px){.product-bottom strong{font-size:11px;white-space:nowrap;letter-spacing:-.2px}}
+/* M10 measured text-contrast corrections; preserve the existing green/neutral palette. */
+:root{--color-text-muted:#64748b}
+.branch span,.shift span:first-child{color:#047857}
+.stock.low{color:#92400e}
+.coming-soon{color:#475569}
+.product.unavailable{opacity:1}
+.categories button.active span{background:#00583d}

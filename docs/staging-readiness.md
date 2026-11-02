@@ -1,8 +1,10 @@
+> **Current:** M9 is merged and post-merge verified. M10 product/demo assessment is in [retail readiness](retail/readiness.md); [operational policy](operations/readiness.md) remains in force. Public production is NO-GO. The M8 assessment below is historical, including controls subsequently implemented in M9.
+
 > M9 supersedes the operational assessment below. See [current readiness policy](operations/readiness.md). M8 is merged; its evidence is the preserved baseline. M9 final-head operational/HTTPS CI must pass, and real external/organizational controls remain unverified.
 
-# Milestone 8 — review candidate, isolated staging evidence
+# Milestone 8 — historical isolated staging evidence (merged)
 
-Both Milestone 7 PRs are merged. Milestone 8 remains unmerged and has no public deployment. Read [MFA/recovery and restore reconciliation](mfa-recovery.md), [threat model](identity-threat-model.md), [dependency review](dependency-review.md) and the [operations runbook](staging-operations.md).
+Both Milestone 7 PRs are merged. Milestone 8 is merged; no public deployment was performed. Read [MFA/recovery and restore reconciliation](mfa-recovery.md), [threat model](identity-threat-model.md), [dependency review](dependency-review.md) and the [operations runbook](staging-operations.md).
 
 ## Executed evidence
 

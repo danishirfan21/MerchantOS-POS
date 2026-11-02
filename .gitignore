@@ -26,3 +26,5 @@ security-evidence/
 
 __pycache__/
 *.pyc
+
+.retail-api.json

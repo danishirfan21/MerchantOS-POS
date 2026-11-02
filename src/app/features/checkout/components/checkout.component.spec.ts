@@ -61,16 +61,25 @@ describe('checkout request identity', () => {
     reject(responses, 0);
     expect(submit(checkout, calls)).toBe(key);
   });
-  it('changes identity for quantity, payment method, and discount changes', () => {
-    let key = submit(checkout, calls); reject(responses, 0);
-    checkout.increase(product.id); let next = submit(checkout, calls); expect(next).not.toBe(key); reject(responses, 0); key = next;
-    checkout.paymentMethod.set('card'); next = submit(checkout, calls); expect(next).not.toBe(key); reject(responses, 0); key = next;
+  it('changes identity for quantity, payment method, and discount changes after definite rejection', () => {
+    let key = submit(checkout, calls); reject(responses, 400, 'rejected');
+    checkout.increase(product.id); let next = submit(checkout, calls); expect(next).not.toBe(key); reject(responses, 400, 'rejected'); key = next;
+    checkout.paymentMethod.set('card'); next = submit(checkout, calls); expect(next).not.toBe(key); reject(responses, 400, 'rejected'); key = next;
     checkout.discountPercent.set(5); next = submit(checkout, calls); expect(next).not.toBe(key);
   });
   it('never reuses an invalidated key when cart values return to earlier values', () => {
-    const first = submit(checkout, calls); reject(responses, 0);
-    checkout.increase(product.id); submit(checkout, calls); reject(responses, 0);
+    const first = submit(checkout, calls); reject(responses, 400, 'rejected');
+    checkout.increase(product.id); submit(checkout, calls); reject(responses, 400, 'rejected');
     checkout.decrease(product.id); expect(submit(checkout, calls)).not.toBe(first);
+  });
+  it('freezes cart and exact payload until an uncertain response reconciles', () => {
+    const key = submit(checkout, calls); reject(responses, 0);
+    checkout.increase(product.id); checkout.removeProduct(product.id); checkout.clearCart();
+    checkout.paymentMethod.set('card'); checkout.discountPercent.set(5);
+    expect(checkout.cart.itemCount()).toBe(1);
+    expect(submit(checkout, calls)).toBe(key);
+    expect(calls[1]).toEqual(calls[0]);
+    responses[1].next(receipt); expect(checkout.uncertain()).toBe(false);
   });
   it('validates exact halalas and retains the cart after a failed payment', () => {
     checkout.cashTendered.set('200.001'); checkout.submitCheckout(); expect(calls).toHaveLength(0);

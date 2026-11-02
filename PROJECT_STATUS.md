@@ -1,8 +1,14 @@
-# Milestone 9 — implemented; unmerged review candidate
+# Milestone 10 — retail validation and isolated demo candidate
+
+Fresh branches from merged M9. New retail browser journeys reproduce and fix uncertain-checkout editing and stale visible search reset, retain the full business/security baseline, add scoped accessibility/performance evidence and a private demo launcher. [UAT matrix](docs/retail/journeys-and-uat.md), [defects](docs/retail/defects-and-exploration.md), [demo](docs/retail/demo.md), [readiness](docs/retail/readiness.md). Final-head CI must pass; PRs remain unmerged. External human acceptance, manual screen-reader use and public production are not approved.
+
+M9 verified merge commits: POS `f2298f72c9fa980593271e7ab1c07ac674f3fac5`; Admin `df58922b2ff69d94cf2848bee9c195d13cfec019`. All six post-merge workflows passed, including 369 staging +51 operational assertions. Historical candidate descriptions below describe evidence at that time and do not undo the completed merges.
+
+# Milestone 9 — merged and post-merge verified
 
 Adds encrypted S3 backup adapters, independently signed recovery receipts/checkpoints, transactional audit outbox/export, dedicated operator privileges, scoped metrics/alert delivery and a fresh-environment recovery drill. No application redesign or financial changes. [Executed verification](docs/operations/verification.md) records the passing functional baseline; final-head PR checks govern review readiness. Real external provider durability/retention, custody, live alert routing and staffing are not established. See [operational readiness](docs/operations/readiness.md).
 
-# Milestone 8 — review candidate; unmerged
+# Milestone 8 — merged and verified
 
 See [MFA and recovery](docs/mfa-recovery.md). Mandatory backend MFA, restricted durable Admin challenges, enrollment/recovery/password UI, restore quarantine and vulnerability gates are implemented. Executed verification includes 72 PostgreSQL identity assertions, 109 Admin browser cases and 283 HTTPS staging assertions. See [exact revisions, runs and readiness](docs/staging-readiness.md); final-head CI must pass before review readiness. Existing business calculations and transaction modules are preserved.
 

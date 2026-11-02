@@ -2,7 +2,9 @@ import {test,expect} from '@playwright/test';
 test.use({storageState:{cookies:[],origins:[]},trace:'off',screenshot:'off'});
 async function password(page:any,value:string){await page.locator('#password').evaluate((el:HTMLInputElement,p:string)=>{el.value=p;el.dispatchEvent(new Event('input',{bubbles:true}));},value);}
 test('cashier browser signs in and signs out without browser token storage',async({page})=>{
- await page.goto('/');await expect(page.getByRole('heading',{name:'MerchantOS POS'})).toBeVisible();await page.getByLabel('Username',{exact:true}).fill(process.env['TEST_CASHIER_USERNAME']!);await password(page,process.env['TEST_CASHIER_PASSWORD']!);
+ await page.goto('/');await expect(page.getByRole('heading',{name:'MerchantOS POS'})).toBeVisible();
+ const {resolve}=await import('node:path');const {writeFileSync}=await import('node:fs');await page.addScriptTag({path:resolve('node_modules/axe-core/axe.min.js')});const scan=await page.evaluate(async()=>await(window as any).axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa','wcag22aa']}}));writeFileSync(test.info().outputPath('login-accessibility.json'),JSON.stringify({violations:scan.violations,incomplete:scan.incomplete.map((v:any)=>({id:v.id,impact:v.impact})),passes:scan.passes.length},null,2));await page.screenshot({path:test.info().outputPath('login.png')});expect(scan.violations.filter((v:any)=>['serious','critical'].includes(v.impact))).toEqual([]);
+ await page.getByLabel('Username',{exact:true}).fill(process.env['TEST_CASHIER_USERNAME']!);await password(page,process.env['TEST_CASHIER_PASSWORD']!);
  await page.getByRole('button',{name:'Sign In',exact:true}).click();await expect(page.locator('.product')).toHaveCount(30);
  const cookie=(await page.context().cookies()).find(c=>c.name==='MerchantOS.Pos.Session');expect(cookie?.httpOnly).toBeTruthy();expect(cookie?.sameSite).toBe('Strict');
  expect(await page.evaluate(()=>localStorage.length+sessionStorage.length)).toBe(0);

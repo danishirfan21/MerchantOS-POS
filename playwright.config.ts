@@ -5,6 +5,7 @@ export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
   retries: 0,
+  workers: 1, // Shared mutable retail fixture: deterministic one-register execution.
   reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
   use: { storageState:'/tmp/merchant-pos-state.json', baseURL: 'http://127.0.0.1:4200', trace: 'off', screenshot: 'only-on-failure' },
   projects: [

@@ -1,86 +1,36 @@
-> **Milestone 9 review candidate:** security operations and disaster recovery. [Architecture](docs/operations/architecture.md), [backup/custody/recovery](docs/operations/backup-recovery.md), [monitoring](docs/operations/monitoring.md), [readiness](docs/operations/readiness.md). M8 is merged. [Executed verification](docs/operations/verification.md) and final-head PR checks determine staging readiness; public production remains blocked.
-
-> **Milestone 8 review candidate:** mandatory Administrator MFA and secure account recovery. [Enrollment, recovery, security events and restore reconciliation](docs/mfa-recovery.md). Milestone 7 is merged. Executed M8 integration and HTTPS recovery evidence is recorded in [readiness](docs/staging-readiness.md); final-head checks govern review readiness. No merge or public deployment.
-
-# Authentication milestone
-
-See [authentication architecture and setup](docs/authentication.md). Protected API routes now require genuine sessions and CSRF on unsafe methods. Development identities must be explicitly provisioned from environment credentials; there are no default accounts. Angular uses the same-origin API proxy and HttpOnly session cookies.
-
 # MerchantOS POS
 
-A bilingual English/Arabic retail checkout demo for a Saudi electronics store. The cashier UI uses Angular 22 and connects to an ASP.NET Core 10 API backed by PostgreSQL 17. Prices and transaction totals use integer halalas (SAR); the API reads current prices, locks inventory rows, records orders and simulated payments, and deducts stock in one database transaction.
+A bilingual English/Arabic cashier application built with Angular 22, ASP.NET Core 10 and PostgreSQL 17. Find products, assemble a cart, take cash or simulated-card payment, and issue a receipt while stock updates transactionally.
 
-> **Demo only:** The API requires authenticated sessions and explicit role policies. Do not expose it to the public internet. Card approval/decline is deterministic simulation; no card details are collected or processed.
+**Milestones 1–9 are merged. Milestone 10 is a retail-validation review candidate.** Isolated demo only; public production remains **NO-GO**. Card payments are simulated; no real card details are collected. No public deployment or automatic merge is part of this candidate.
 
-## Features
+## Try the retail workflows
 
-- Responsive catalog of 30 products, local original SVG illustrations, search, category filters and live stock.
-- Signals cart with stock limits, 0/5/10% discounts and 15% VAT; English/Arabic and RTL across catalog, payment, order history and receipts.
-- Cash tender/change and simulated card checkout, safe idempotent retries, inventory refresh, printable receipt and recent orders.
-- PostgreSQL row locks serialize competing stock purchases; duplicate checkout keys cannot create duplicate completed sales.
+Use the [private HTTPS demo setup and guided walkthrough](docs/retail/demo.md). It generates disposable native accounts and fictional retail data, preserves Administrator MFA and provides explicit health/reset commands. No permanent demo passwords are published.
 
-## Screenshots
+- **Cashier:** search/category browse, quantity/remove controls, 0/5/10% discount, 15% VAT, cash/change or simulated card, receipt/print and English/Arabic RTL. Uncertain checkout retains its exact request across same-tab reload and offers safe reconciliation retry.
+- **Manager:** MFA, Overview, product edits, version-checked stock adjustment with reason/review, audit history, complete order history, Asia/Riyadh reporting and filtered CSV.
+- **Reviewer:** [acceptance matrix](docs/retail/journeys-and-uat.md), [confirmed defects](docs/retail/defects-and-exploration.md), [accessibility assessment](docs/retail/accessibility.md), [performance evidence](docs/retail/performance.md), [release limitations](docs/retail/readiness.md).
 
-Actual live API/PostgreSQL browser captures at the requested viewports. CI also uploads the Playwright report and cart/receipt captures.
+## How the applications fit together
 
-| Desktop 1440×900 | Tablet 768×1024 | Mobile 390×844 |
-| --- | --- | --- |
-| [View desktop](docs/screenshots/desktop.png) | [View tablet](docs/screenshots/tablet.png) | [View mobile](docs/screenshots/mobile.png) |
-
-## Run locally
-
-Install Docker (with Compose), Node.js 24 and npm. From the repository root:
-
-```sh
-docker compose up -d db
-# Apply all migrations and provision accounts as documented in docs/authentication.md.
-# Run the API as a host process over HTTPS (or explicit loopback-only Development HTTP).
-npm ci
-npm start
+```mermaid
+flowchart TD
+    P[Angular cashier POS] --> A[ASP.NET Core POS API]
+    M[Admin MVC manager interface] --> A
+    A --> D[PostgreSQL transactions and identity]
+    A --> R[Orders and historical reporting]
+    D --> O[Encrypted backup and audit adapters]
 ```
 
-Open `http://localhost:4200`. The Angular dev server proxies `/api` to `http://127.0.0.1:5080`. Check API health at `http://localhost:5080/api/health`. Use Compose for PostgreSQL; the legacy container API HTTP path is not compatible with the strict loopback transport exception. Apply all db/migrations/*.sql in numeric order. The migration preserves an existing database volume; the initial catalog seed contains 30 products and inventory rows. Compose credentials are for local demo use only.
+POS is the sole identity/MFA and business-data authority. Admin holds restricted pending-login tickets until POS confirms MFA; it never becomes a second identity service. Checkout reads authoritative prices and locks inventory inside one transaction. Historical receipts retain their original prices. Private HTTPS staging and encrypted backup/recovery are tested separately from the loopback UI suites.
 
-## Verify
+## Evidence and scope
 
-```sh
-npm run build
-npm test
-npm run test:e2e
-```
+[Actual browser screenshots and gallery](docs/retail/screenshots.md) cover desktop 1440×900, tablet 768×1024 and mobile 390×844, plus Arabic and narrow POS reflow. Screenshots are from the running applications, not generated mockups. The M9 baseline retains 48 POS/69 Admin .NET tests, 72 database identity assertions, 21 Angular tests, 24 POS/109 Admin browser cases, 383 reporting, 99 management, 51 operational and 369 HTTPS recovery assertions. M10 adds targeted retail/keyboard/axe checks; final counts and exact source revisions belong in the PR/CI evidence.
 
-The Playwright suite requires the API/database running and a Chromium browser (`npx playwright install chromium` if needed). CI in `.github/workflows/milestone-2.yml` starts a fresh PostgreSQL 17 service, applies schema/seed/migration, builds and exercises the live .NET API, builds/tests Angular, then runs desktop, tablet and mobile Playwright flows with zero retries. `scripts/verify_live_api.py` checks catalog endpoints; `scripts/verify_checkout.py` checks transactions and concurrency against real PostgreSQL. CI uploads screenshots, Playwright HTML report and API log.
+Independent human cashier/manager acceptance and manual screen-reader testing remain pending. CI timing is not a production SLA. Real off-host durability, independent custody and live on-call routing still require external evidence; the staging-only vulnerability exception is not a production clearance.
 
-## Architecture and API
+## Engineering details
 
-- `src/app/features/checkout`: standalone Angular checkout screen, Signals cart, typed bilingual copy and focused unit tests.
-- `src/app/core/services`: typed HTTP repositories for catalog and checkout.
-- `services/merchant-api`: ASP.NET Core minimal API and Npgsql transaction code.
-- `db/init` and `db/migrations`: catalog seed and versioned checkout schema.
-- `public/products`: original local SVG product-category illustrations.
-
-| Endpoint | Purpose |
-| --- | --- |
-| `GET /api/health` | Database health |
-| `GET /api/products?search=&category=` | Catalog search/filter |
-| `GET /api/products/{id}` | Product detail |
-| `GET /api/categories` | Categories |
-| `GET /api/inventory/{productId}` | Current stock |
-| `POST /api/checkout` | Atomic demo sale |
-| `GET /api/orders` | Recent orders |
-| `GET /api/orders/{id}` | Receipt |
-
-Checkout accepts product IDs/quantities, an allowed discount (0, 5 or 10), cash tender or a deterministic simulated card scenario, and an idempotency key. The server ignores any frontend price assumptions. Discount and VAT are rounded separately to the nearest halala, half up. Failed payments leave inventory unchanged. See [PROJECT_STATUS.md](PROJECT_STATUS.md) for verified checks and limitations.
-
-## Milestone5 administration API
-
-[Management contracts](docs/management.md): Administrator-only product editing, transactional inventory adjustments and immutable audit history. Angular remains cashier-only and contains no editing controls. Names/category/price can change; existing IDs/SKUs and receipt snapshots remain unchanged. Apply additive migration005 after identity004; never reset populated data. CI verifies real authorization, concurrency, idempotency and audit rollback. Security PR #3 is merged. Management [PR #4](https://github.com/danishirfan21/MerchantOS-POS/pull/4) merged as ad73c8e406fc1b42c8fdf4fd88b721d08f2ce320; Admin PR #6 pins its tested backend.
-
-## Historical reporting (Milestone 6)
-
-Administrator-only historical Orders, exact sales metrics, store-local trends, payment breakdown, top products and bounded UTF-8 CSV exports. See [reporting contracts and financial/date definitions](docs/reporting.md). Reports query PostgreSQL directly; Cashier receipt ownership and Angular behavior remain unchanged. Apply additive index migration006 after existing migrations. [POS PR #5](https://github.com/danishirfan21/MerchantOS-POS/pull/5) and dependent Admin PR #7 are merged.
-
-
-## Milestone 7 — operational staging
-
-Milestone 7 is merged in both repositories. See [staging operations and incident runbook](docs/staging-operations.md) and [evidence/readiness matrix](docs/staging-readiness.md). Persistent protected keys, durable Admin tickets, strict local HTTPS Compose, safe migrations, encrypted backup/restore, health/readiness and correlation-safe logging are implemented. The real HTTPS Compose recovery drill passed 176 assertions; complete existing regression suites and credential audits pass. Remaining image findings and production blockers are recorded in the matrix. No public deployment or automatic merge.
+[Authentication/MFA](docs/authentication.md) · [Recovery](docs/mfa-recovery.md) · [Threat model](docs/identity-threat-model.md) · [Operations](docs/operations/architecture.md) · [Release policy](docs/operations/readiness.md) · [Dependency review](docs/dependency-review.md) · [Project history](PROJECT_STATUS.md).
