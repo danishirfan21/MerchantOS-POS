@@ -67,3 +67,36 @@ New operational dependencies are boto3 1.43.123 and psycopg 3.3.6 with hash-lock
 Trivy now retains CycloneDX SBOMs alongside every unsuppressed exact-image JSON report, IDs and layer digests. OS repositories remain mutable; byte-for-byte reproducible image builds are not claimed. Existing GitHub Actions commit pins, digest-pinned PostgreSQL/Caddy/Go/.NET/Node bases, read-only/capability/non-root runtime controls and checksum-verified scanner installation remain in force. Final M9 scan evidence is recorded with the submitted PR heads.
 
 Primary references: https://github.com/advisories/GHSA-mgcc-cww5-fp2q ; https://github.com/caddyserver/caddy/releases/tag/v2.11.7 ; https://trivy.dev/docs/latest/guide/configuration/reporting/ ; https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html .
+
+## Security gate remediation (2026-11-14)
+
+**Why.** New advisories published after the last green run (2026-11-02) made the staging vulnerability gate fail for any branch, independent of its code. Failing run: [43562605154](https://github.com/danishirfan21/MerchantOS-POS/actions/runs/43562605154) on POS PR #10 (the same gate failed on the push run 43555664084).
+
+| Finding | Component | Before | Fixed in | After |
+|---|---|---|---|---|
+| CVE-2026-114146 (GHSA-67wp-ghc2-fw2g, ASP.NET Core elevation of privilege) | `Microsoft.AspNetCore.App.Runtime.linux-x64` in the API image | 10.0.14 | 10.0.15 | 10.0.15 |
+| CVE-2026-114147 | same | 10.0.14 | 10.0.15 | 10.0.15 |
+| CVE-2026-114149 (GHSA-x33c-w48q-qrgc, ASP.NET Core denial of service) | same | 10.0.14 | 10.0.15 | 10.0.15 |
+| CVE-2026-78661 (GO-2026-6860, quadratic html text-node coalescing) | `golang.org/x/net` in the rebuilt Caddy | v0.60.0 | v0.62.0 | v0.62.0 |
+
+Advisory data was checked against OSV (`api.osv.dev`) on 2026-11-14: no advisories are listed for ASP.NET runtime 10.0.15 or `golang.org/x/net` v0.62.0. `x/net` v0.60.0 also carried GO-2026-6866 (CVE-2026-97045), fixed in the same v0.62.0.
+
+**Base images** (index digests resolved from `mcr.microsoft.com`; the version was read from the image configuration of the linux/amd64 manifest):
+
+| Image | Before | After |
+|---|---|---|
+| `mcr.microsoft.com/dotnet/sdk:10.0` | `sha256:de4fe90a…c02b` (SDK 10.0.403, runtime 10.0.14) | `sha256:fe0fd4e93bd2fbb47c883b7a6369e5c8d3db8bf01cdc5981f6ee35fbdf3ff4fb` (SDK 10.0.404, runtime 10.0.15, built 2026-11-10) |
+| `mcr.microsoft.com/dotnet/aspnet:10.0` | `sha256:de0ee358…2fa7fee` (10.0.14) | `sha256:bfd912c83295ce66d4b706ebb8541b9f14259b0e76fbb88b2751f58ce2399d2e` (10.0.15, built 2026-11-10) |
+
+Digest pinning is preserved in `services/merchant-api/Dockerfile` and `deploy/images.json`. `deploy/Dockerfile.web` now requests `golang.org/x/net@v0.62.0`; Caddy stays at v2.11.7 and go-jose/v4 at v4.1.6, the Go builder image is unchanged, and no Caddy configuration changed.
+
+**Policy.** No exception was added or changed, no threshold or scanner version was altered, and the security workflow is untouched. The existing staging-only exception for `github.com/go-jose/go-jose/v3` CVE-2026-116587 (expires 2026-12-01) is unchanged. Public production remains blocked.
+
+**Local verification (Windows host, no Docker available, so container builds and Trivy scans were not run locally):**
+
+- Module graph: with Go 1.27.3 and the Dockerfile's exact `go get` line, `go list -m` resolved `golang.org/x/net v0.62.0`, `go-jose/v4 v4.1.6`, `caddy/v2 v2.11.7`; the binary built for linux/amd64 and `go version -m` on it reports the same versions.
+- Image versions: the .NET runtime version of both pinned digests was read from the registry image configuration (10.0.15).
+- `dotnet test` (48 tests, isolated PostgreSQL available) passed; `deploy/test_security_gate.py` passes (9 tests) once a `python3` command exists on PATH (on this Windows host it needed a shim).
+- `govulncheck` on the rebuilt Caddy binary (informational, not the repository gate) no longer reports GO-2026-6860/6866 but lists other findings that the repository gate did not report: `github.com/klauspost/compress` v1.20.1 (fixed v1.20.2), Go standard library `net/http` in go1.27.3 (fixed go1.27.4) and `golang.org/x/crypto` v0.58.0 (openpgp packages). These are outside this change and are left for a separate review.
+
+**GitHub Actions verification** of this change is recorded in the pull request, not here.
