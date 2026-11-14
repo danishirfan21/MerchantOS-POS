@@ -4,6 +4,7 @@ using MerchantOS.Api.Security;
 using MerchantOS.Api.Contracts;
 using MerchantOS.Api.Data;
 using MerchantOS.Api.Domain;
+using MerchantOS.Api.Storefront;
 using Microsoft.EntityFrameworkCore;
 
 if(args.Contains("--healthcheck")){Environment.ExitCode=await OperationalSecurity.HealthProbe("/api/health/ready");return;}
@@ -15,6 +16,7 @@ var connectionString = builder.Configuration.GetConnectionString("MerchantDb")
 
 builder.Services.AddDbContext<MerchantDbContext>(options => options.UseNpgsql(connectionString));
 builder.AddSecurity();
+builder.AddStorefrontCatalog();
 var app = builder.Build();
 OperationalSecurity.InitializeKeys(app,args);
 if(args.Contains("--rotate-keys")||args.Contains("--revoke-keys"))return;
@@ -95,6 +97,7 @@ app.MapGet("/api/categories", async (MerchantDbContext db, CancellationToken ct)
     return Results.Ok(categories);
 }).RequireAuthorization("Catalog");
 
+app.MapStorefrontCatalog(); // disabled unless Storefront:Catalog:Enabled=true
 app.MapCheckout();
 app.MapManagement();
 app.MapReporting();
